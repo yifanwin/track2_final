@@ -51,8 +51,34 @@ from track2_judge.toolapi.gateway import (
     EXEC_STOPPED_CONFIRMED, OUTCOME_SUCCEEDED, PHASE_TERMINAL,
 )
 
+# ─────────────────────────────────────────── Action 的两套 wire 词表（归一化）
+#
+# 这里必须**同时认两种形状**，因为第 3 步之后 Tool 面换成了**官方 gateway**，
+# 而它的 phase 词表与本地 `LocalGateway` 不是一套（实测，见
+# `work/reports/54_pitfalls.md` C 段）：
+#
+# | | 本地 `LocalGateway` | 官方 gateway |
+# |---|---|---|
+# | 终结 phase | 字面量 `"terminal"` | `completed` / `failed` / `cancelled` / `stopped` / `unknown` |
+# | 结果形状 | 顶层 `outcome` + `result` | `result` 是 ToolResult 投影（`status` + `outputs`） |
+# | 超时证据 | `execution_status` / `cancel_effective` | **两者都没有**（`ToolControlResponse.details` 被丢） |
+#
+# 「三态语义」这条在第 3 步的 provider 侧靠 `details` 带着走，但**官方 gateway
+# 不转发 details**（只留 `control.status` → `cancel_status`）。所以客户端的
+# 证据来源必须改用「phase 是否已终结」—— 那同样是否定性的又一次确认：
+# 终结 ⟺ 执行体已退出 ⟺ 物理不再在飞。
+
+_TERMINAL_PHASES = frozenset({
+    PHASE_TERMINAL,            # 本地 gateway
+    "completed", "failed", "cancelled", "stopped", "unknown",   # 官方 gateway
+})
+
+# 官方 `ToolResult.status` 的终局取值
+_SUCCEEDED_RESULT_STATUS = "succeeded"
+
 __all__ = ["ToolClient", "HttpTransport", "InProcessTransport", "SandboxBridge",
            "EpisodeTools", "build_episode_tools",
+           "is_terminal_phase", "action_outcome", "query_payload",
            "ToolCallError", "ActionTimeout", "ActionStoppedUnknown"]
 
 
@@ -153,6 +179,36 @@ class HttpTransport:
 
 # ─────────────────────────────────────────────────────── 对外客户端
 
+def query_payload(data: object) -> dict:
+    """从 Query 响应里取出**选手看得到的观测**。
+
+    与 Action 同样的两套 wire（实测，见 `work/reports/54_pitfalls.md`）：
+
+    ```text
+    本地 LocalGateway :  data = {observation_id, captured_at_s, robot, ...}
+    官方 gateway      :  data = {endpoint_id, operation,
+                                 response: {outcome, result: {outputs: {...}}}}
+    ```
+
+    不归一化的话，选手在官方链路上拿到的 `observe()` 里**没有 `robot`** ——
+    与本地开发时完全不同的形状，且报错是 `KeyError: 'robot'`（看不出所以然）。
+    """
+    if not isinstance(data, dict):
+        return {}
+    # 官方：data.response.result.outputs
+    response = data.get("response")
+    if isinstance(response, dict):
+        result = response.get("result")
+        if isinstance(result, dict):
+            outputs = result.get("outputs")
+            if isinstance(outputs, dict):
+                return outputs
+        # 官方失败时 result 缺席 —— 把 response 原样回给调用方看状态
+        return response if response else {}
+    # 本地：data 本身就是观测
+    return data
+
+
 class ToolClient:
     """选手 `run(observation, tools)` 拿到的 `tools`。
 
@@ -191,7 +247,7 @@ class ToolClient:
             "track2.env", "observe", {"arguments": dict(kwargs)})
         if status != 200 or not body.get("ok"):
             raise ToolCallError(_error_text(body, status))
-        return body["data"]
+        return query_payload(body["data"])
 
     # ── Action（对外仍是「调用即返回」）
 
@@ -239,7 +295,7 @@ class ToolClient:
                 endpoint_id, operation, {"arguments": arguments or {}})
             if status != 200 or not body.get("ok"):
                 raise ToolCallError(_error_text(body, status))
-            return body["data"]
+            return query_payload(body["data"])
         return self._run_action(tool_id, arguments or {})
 
     # ── Action 生命周期（内部）
@@ -257,6 +313,7 @@ class ToolClient:
         invocation_id = body["data"]["invocation_id"]
         deadline = self._clock() + self.action_timeout_s
 
+        # 轮询到「phase 终结」。**两种 wire 的终结 phase 都认**（见模块里的对照表）。
         while True:
             if self._clock() >= deadline:
                 # Q12 + Q13：超时 → cancel → **等 backend 确认** → 如实分类。
@@ -265,19 +322,29 @@ class ToolClient:
             if status != 200:
                 raise ToolCallError(_error_text(body, status))
             data = body["data"]
-            if data.get("phase") == PHASE_TERMINAL:
+            if is_terminal_phase(data):
                 break
             self._sleep(self.poll_interval_s)
 
-        if data.get("outcome") != OUTCOME_SUCCEEDED:
-            raise ToolCallError(
-                f"{tool_id} {data.get('outcome')}: {data.get('error') or 'no detail'}")
+        # ① 有些 gateway 在 status 里就带了结果（本地 `LocalGateway` 会带 outcome；
+        #    官方 gateway 终结时也会带 `result`）。先试从 status 里取。
+        outcome, payload, error = action_outcome(data)
 
-        status, body = self._transport.action_result(invocation_id)
-        if status != 200 or not body.get("ok"):
-            raise ToolCallError(_error_text(body, status))
+        # ② 官方 gateway 的 status **不保证**带 `result`（实测：终态时
+        #    `phase=completed` 但 `result` 字段缺席）。这时要再打一次 `/result`。
+        if not payload:
+            status, body = self._transport.action_result(invocation_id)
+            if status != 200 or not body.get("ok"):
+                raise ToolCallError(_error_text(body, status))
+            result_data = body["data"]
+            outcome, payload, error = action_outcome(result_data)
+
+        if outcome != OUTCOME_SUCCEEDED:
+            detail = error.get("message") or error.get("code") or "no detail"
+            raise ToolCallError(f"{tool_id} {outcome}: {detail}")
+
         self.action_steps += 1
-        return body["data"].get("result")
+        return payload
 
     def _timeout(self, invocation_id: str) -> Exception:
         """超时处理。**只有拿到正面证据才报 cancelled。**"""
@@ -288,10 +355,34 @@ class ToolClient:
                 f"action {invocation_id} timed out; cancel request failed, "
                 "physical stop unconfirmed")
         data = (body or {}).get("data") or {}
+
+        # ① 本地 gateway 会回执行体状态 —— 有**正面证据**就报「已确认停止」。
         execution_status = data.get("execution_status")
         if execution_status == EXEC_STOPPED_CONFIRMED:
             return ActionTimeout(
                 f"action {invocation_id} timed out and was confirmed stopped")
+
+        # ② 官方 gateway **不转发** `ToolControlResponse.details`，
+        #    所以超时路径拿不到 `execution_status`。替代的正面证据是
+        #    「phase 已经终结」—— 那同样意味着执行体已退出、物理不再在飞。
+        #    这是在**官方 wire 限制下能得到的最强证据**，且方向是保守的：
+        #    拿不到就仍然报 `unknown`。
+        confirmed_by_phase = False
+        try:
+            status, status_body = self._transport.action_status(invocation_id)
+            if status == 200 and status_body.get("ok"):
+                phase = (status_body.get("data") or {}).get("phase")
+                if phase in _TERMINAL_PHASES:
+                    confirmed_by_phase = True
+                    execution_status = f"stopped_confirmed(phase={phase})"
+        except Exception:                                  # noqa: BLE001
+            pass
+
+        if confirmed_by_phase:
+            return ActionTimeout(
+                f"action {invocation_id} timed out; backend confirmed terminal "
+                f"({execution_status})")
+
         # Q13 的核心：cancel accepted ≠ 已停。拿不到证据就如实说不知道。
         return ActionStoppedUnknown(
             f"action {invocation_id} timed out; cancel_status="
@@ -411,6 +502,50 @@ class EpisodeTools:
 
 
 # ── 两个方向的统一入口（§4.2）
+
+def is_terminal_phase(data: dict) -> bool:
+    """`phase` 是否已终结 —— **两种 wire 都认**。"""
+    return data.get("phase") in _TERMINAL_PHASES
+
+
+def action_outcome(data: dict) -> tuple[str, dict, dict]:
+    """从 status/result 响应里取出 `(outcome, payload, error)`。
+
+    返回的 `outcome` 统一成 `OUTCOME_*` 那套字面量，调用方不用关心
+    底层是哪一种 gateway。
+
+    `payload` 是**选手看得到的动作结果**（`control_steps` / `sim_time_s`）；
+    `error` 是 `{"code","message"}` 或 `{}`。
+    """
+    raw_result = data.get("result")
+    result: dict = raw_result if isinstance(raw_result, dict) else {}
+
+    # 本地形状：顶层 outcome
+    outcome = data.get("outcome")
+    # 官方形状：ToolResult 投影在 result.status
+    if outcome is None:
+        outcome = result.get("status")
+    # 官方把「结果本身」放在 result.outputs；本地放在 result
+    if "outputs" in result:
+        payload = result.get("outputs") or {}
+    elif isinstance(data.get("outcome"), str):
+        payload = result
+    else:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    if outcome is None:
+        # 终结了但两边都没给结论 —— 如实说不知道，**不猜成功**
+        outcome = "unknown"
+    if outcome == _SUCCEEDED_RESULT_STATUS:
+        outcome = OUTCOME_SUCCEEDED
+
+    error = result.get("error") or data.get("error") or {}
+    if not isinstance(error, dict):
+        error = {"message": str(error)[:200]}
+    return outcome, payload, error
+
 
 _HTTP_BRIDGE_ENV = "TRACK2_TOOL_GATEWAY_URL"
 

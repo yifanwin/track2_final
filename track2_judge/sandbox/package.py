@@ -56,10 +56,13 @@ def unpack_skill(source,destination):
     return package
 
 class PackageExecutor:
-    def __init__(self,package,work,*,isolated=True,trusted=False,timeout_s=10):
+    def __init__(self,package,work,*,isolated=True,trusted=False,timeout_s=10,spec=None):
         self.package=package;self.closed=False;self.lifecycle=[];self.default_timeout=timeout_s;self.tool_service_s=0.
+        # `spec` 决定沙箱档（第 4 步 / Q18）：
+        #   None → stdlib 档（第 4 步之前的默认，21 项回归跑的就是它）
+        #   official_spec(...) → 官方 runtime 档，torch + CUDA 可用
         self.process=SkillProcess(Path(__file__).with_name('package_host.py'),work,isolated=isolated,trusted=trusted,
-            package_root=package.root,entrypoint=package.entrypoint.relative_to(package.root).as_posix())
+            package_root=package.root,entrypoint=package.entrypoint.relative_to(package.root).as_posix(),spec=spec)
         try:
             ready=self.process.receive(timeout_s)
             if ready.get('type')!='ready' or set(ready)-{'type','pid'}:raise RuntimeError('Skill readiness rejected')
@@ -99,7 +102,16 @@ class PackageExecutor:
                 if msg['result'].get('status')=='error':raise RuntimeError('Skill reported failure')
                 # All claimed state, scores and evidence are ignored. Parent judges physics.
                 return msg['result']
-            else:raise RuntimeError('package execution/protocol rejected')
+            else:
+                # ⚠️ 把**收到的是什么**带进错误里。原来只写
+                #    `package execution/protocol rejected`，看不出是
+                #    宿主报了错、还是协议真的被违反 —— 排查时要重跑一遍
+                #    才能加打印。这里带上有界摘要（不含裁判路径/私有状态，
+                #    因为摘要来自**子进程**发给我们的消息）。
+                kind=str(msg.get('type'))[:32]
+                category=str(msg.get('category') or msg.get('error') or '')[:120]
+                raise RuntimeError('package execution/protocol rejected: '
+                                   'type=%s category=%s' % (kind,category))
     def close(self):
         if self.closed:return
         self.closed=True
