@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "checks": {
+    "single_case_no_private_projection": "PASS",
+    "per_case_assets": "PASS",
+    "traversal": "PASS",
+    "wrong_digest": "PASS",
+    "hidden_input_rejected": "PASS",
+    "symlink": "PASS",
+    "public_approval_hash": "PASS",
+    "private_permissions": "PASS"
+  },
+  "official78_execution": "NOT TESTED: approved task definitions and physical asset conversion required"
+}

@@ -1,0 +1,11 @@
+{
+  "status": "FAIL",
+  "actual_TTG001_RGB": false,
+  "physical_gpu": "authorized GPU 0",
+  "physical_parameters_changed": false,
+  "error": "RuntimeError",
+  "message": "failed to find device \"cuda:0\"",
+  "wall_s": 4.189,
+  "authorized_gpu_index": 0,
+  "probe_exit": 0
+}

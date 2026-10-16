@@ -1,0 +1,77 @@
+{
+  "status": "PASS",
+  "scope": "actual original CoACD32 frozen action replay; not new planning or score",
+  "health": {
+    "schema": "physics-health-diagnostic-v1",
+    "coverage": "COMPLETE",
+    "frames": 11160,
+    "expected_frames": 11160,
+    "status": "REVIEW_REQUIRED",
+    "nonfinite_frames": 0,
+    "first_flags": {
+      "CONTACT_IMPULSE_ALERT": {
+        "substep": 3043,
+        "bodies": [
+          "blue_mug_on_table_000",
+          "white_square_table_000"
+        ],
+        "point_impulse_Ns": 3.116542845700232,
+        "not_divergence_proof": true
+      },
+      "DEEP_CONTACT_ALERT": {
+        "substep": 5428,
+        "bodies": [
+          "gripper_link1",
+          "blue_mug_on_table_000"
+        ],
+        "penetration_m": 0.018029360100626945,
+        "not_divergence_proof": true
+      },
+      "DECLARED_JOINT_VELOCITY_EXCEEDED": {
+        "substep": 5447,
+        "joint_indices": [
+          3,
+          6
+        ],
+        "units": "rad/s for arm; m/s for fingers",
+        "scope": "observed physical velocity, not commanded slew or score"
+      },
+      "OUT_OF_SUPPORT_XY": {
+        "substep": 5504,
+        "object": "blue_mug_on_table_000",
+        "membership": "actor center; not forbidden-zone policy"
+      },
+      "SPEED_ALERT": {
+        "substep": 5735,
+        "object": "blue_mug_on_table_000",
+        "speed_m_s": 10.001827779880362,
+        "not_divergence_proof": true
+      },
+      "HIGH_SPEED_GRAVITY_COMPATIBLE": {
+        "substep": 5735,
+        "object": "blue_mug_on_table_000",
+        "gravity_residual_m_s2": 0.00010437011718700262
+      }
+    },
+    "flag_counts": {
+      "CONTACT_IMPULSE_ALERT": 12,
+      "DEEP_CONTACT_ALERT": 6,
+      "DECLARED_JOINT_VELOCITY_EXCEEDED": 1,
+      "OUT_OF_SUPPORT_XY": 5657,
+      "SPEED_ALERT": 5426,
+      "HIGH_SPEED_GRAVITY_COMPATIBLE": 5426
+    },
+    "max_speed_m_s": 231.02833559385473,
+    "gravity_compatible_frames": 5699,
+    "max_accepted_gravity_residual_m_s2": 0.0010400390625004974,
+    "chain_sha256": "41fa2d6e3ab28ba2b850ecd2d2b25da5fa49125bb161a71f501ca3c03f2bc084",
+    "support_envelope_configured": true,
+    "declared_velocity_limits_checked": true,
+    "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+    "public_skill_visibility": false
+  },
+  "private_evidence_sha256": "3984ff12e292ae90b77d636faf3b359633b304eb7f7803835e6de3eaad4609a9",
+  "wall_s": 80.68814900470898,
+  "formal_parameters_changed": false,
+  "official_score_generated": false
+}

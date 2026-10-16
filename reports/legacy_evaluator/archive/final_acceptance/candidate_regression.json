@@ -1,0 +1,93 @@
+[
+  {
+    "test": "install",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 0.064,
+    "script": "check_install.py"
+  },
+  {
+    "test": "manifest_before",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 0.166,
+    "script": "verify_manifest.py"
+  },
+  {
+    "test": "health",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 5.279,
+    "script": "health_contract_test.py"
+  },
+  {
+    "test": "v1",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 20.448,
+    "script": "tests.py"
+  },
+  {
+    "test": "v2",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 35.38,
+    "script": "v2_tests.py"
+  },
+  {
+    "test": "security",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 0.265,
+    "script": "security_test.py"
+  },
+  {
+    "test": "package_security",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 0.314,
+    "script": "package_security_test.py"
+  },
+  {
+    "test": "extended_security",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 30.429,
+    "script": "acceptance_security_test.py"
+  },
+  {
+    "test": "trusted_data",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 0.114,
+    "script": "trusted_data_test.py"
+  },
+  {
+    "test": "physics",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 14.242,
+    "script": "v2_physics_test.py"
+  },
+  {
+    "test": "non_target_drop",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 13.542,
+    "script": "v2_physics_test.py"
+  },
+  {
+    "test": "missing_evidence",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 8.327,
+    "script": "v2_physics_test.py"
+  },
+  {
+    "test": "manifest_after",
+    "status": "PASS",
+    "exit": 0,
+    "wall_s": 0.164,
+    "script": "verify_manifest.py"
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "cases": 73,
+  "goal_anchor_5mm": 69,
+  "all_five_initial_anchors_5mm": 65,
+  "not_grasp_or_motion_feasibility_proof": true,
+  "operator": "position-only bounded IK with candidate Piper base yaw, fixed asset root"
+}

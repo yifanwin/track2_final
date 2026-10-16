@@ -1,0 +1,546 @@
+{
+  "environment_rebuild": {
+    "offline_install_exit": 0,
+    "network_install": false,
+    "old_environment_modified": false,
+    "lock_check_exit": 0,
+    "check": {
+      "status": "PASS",
+      "differences": [],
+      "physx_version": "105.1-physx-5.3.1.patch0"
+    }
+  },
+  "final_validation": [
+    {
+      "test": "verify_manifest.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 0.114
+    },
+    {
+      "test": "environment_lock.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 1.668
+    },
+    {
+      "test": "frozen73_scoring_test.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 0.225
+    },
+    {
+      "test": "hardening_tests.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 0.869
+    },
+    {
+      "test": "tests.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 21.813
+    },
+    {
+      "test": "v2_tests.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 37.343
+    },
+    {
+      "test": "health_contract_test.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 5.432
+    },
+    {
+      "test": "extension_security_test.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 7.028
+    },
+    {
+      "test": "worker_handoff_test.py",
+      "exit": 0,
+      "status": "PASS",
+      "wall_s": 0.165
+    }
+  ],
+  "result_gate_tests": {
+    "checks": {
+      "approved_runtime_failure_with_valid_artifact_still_blocked": "PASS",
+      "both_input_modes_no_default_and_private_field_rejection": "PASS",
+      "explicit_approved_verified_score_only": "PASS",
+      "gt_read_exception": "PASS",
+      "nonfinite_state": "PASS",
+      "old_approved_failure_counterexample_blocked": "PASS",
+      "receipt_missing": "PASS",
+      "record_tamper": "PASS",
+      "recorder_missing": "PASS",
+      "runtime_exception": "PASS",
+      "score_tamper": "PASS",
+      "scorer_hash_mismatch": "PASS",
+      "state_missing": "PASS",
+      "storage_failure_blocks_score_and_logs_reason": "PASS",
+      "trusted_tool_latency_excluded_from_compute_deadline": "PASS",
+      "verified_task_failure_preserves_frozen_score": "PASS",
+      "verifier_failed": "PASS"
+    },
+    "official_score": null,
+    "scope": "synthetic release gates, no network or GT",
+    "status": "PASS"
+  },
+  "security": {
+    "status": "PASS",
+    "checks": {
+      "import_contract_extension": "PASS",
+      "import_case_backend": "PASS",
+      "import_run_selected_candidate": "PASS",
+      "import_runner": "PASS",
+      "import_sapien": "PASS",
+      "other_case_GT_r": "PASS",
+      "other_case_GT_w": "PASS",
+      "hidden_initial_pose_r": "PASS",
+      "hidden_initial_pose_w": "PASS",
+      "hidden_final_pose_r": "PASS",
+      "hidden_final_pose_w": "PASS",
+      "private_casebank_r": "PASS",
+      "private_casebank_w": "PASS",
+      "private_freeze_manifest_r": "PASS",
+      "private_freeze_manifest_w": "PASS",
+      "scorer_internal_state_r": "PASS",
+      "scorer_internal_state_w": "PASS",
+      "extension_evidence_r": "PASS",
+      "extension_evidence_w": "PASS",
+      "extension_score_r": "PASS",
+      "extension_score_w": "PASS",
+      "canaries_unchanged": "PASS",
+      "RPC_set_pose": "PASS",
+      "RPC_translate": "PASS",
+      "RPC_rotate": "PASS",
+      "RPC_get_layout": "PASS",
+      "RPC_get_final_state": "PASS",
+      "RPC_get_physics_health": "PASS",
+      "RPC_get_initialization_evidence": "PASS",
+      "RPC_score_callback": "PASS",
+      "physical_state_unchanged": "PASS"
+    },
+    "scope": "actual isolated synthetic packages, extension/casebank canaries and real Piper state; not exhaustive security certification",
+    "official_callback_sent": false
+  },
+  "handoff": {
+    "status": "PASS",
+    "checks": {
+      "candidate_score_callback_blocked": "PASS",
+      "duplicate_stage_idempotent": "PASS",
+      "two_workers_one_local_claim": "PASS",
+      "failure_retry_and_ack": "PASS",
+      "conflicting_score_rejected": "PASS",
+      "crash_requires_authoritative_reconciliation": "PASS"
+    },
+    "network_requests": 0,
+    "production_queue_reads": 0,
+    "platform_exactly_once": "NOT TESTED: remote callback idempotency/ack contract absent",
+    "scope": "synthetic offline Worker handoff; no formal score policy change"
+  },
+  "positive_physics_controls": [
+    {
+      "P1_P2_evaluated": true,
+      "episodes": 10,
+      "execution_errors": 0,
+      "formal_score": null,
+      "frozen_rule_score_100": 100.0,
+      "grasp_motion_observed": true,
+      "health_flags": [],
+      "health_frames": 113760,
+      "kind": "box",
+      "max_lift_m": 0.08923085629940034,
+      "result_gate": "PASS",
+      "scope": "synthetic representative positive control, not Frozen73 Case certificate",
+      "status": "PASS",
+      "task_failures": 0,
+      "task_successes": 10
+    },
+    {
+      "P1_P2_evaluated": true,
+      "episodes": 10,
+      "execution_errors": 0,
+      "formal_score": null,
+      "frozen_rule_score_100": 100.0,
+      "grasp_motion_observed": true,
+      "health_flags": [],
+      "health_frames": 113760,
+      "kind": "bowl",
+      "max_lift_m": 0.09203247576951981,
+      "result_gate": "PASS",
+      "scope": "synthetic representative positive control, not Frozen73 Case certificate",
+      "status": "PASS",
+      "task_failures": 0,
+      "task_successes": 10
+    },
+    {
+      "P1_P2_evaluated": true,
+      "episodes": 10,
+      "execution_errors": 0,
+      "formal_score": null,
+      "frozen_rule_score_100": 100.0,
+      "grasp_motion_observed": true,
+      "health_flags": [],
+      "health_frames": 113760,
+      "kind": "complex_mug",
+      "max_lift_m": 0.08426818132400513,
+      "result_gate": "PASS",
+      "scope": "synthetic representative positive control, not Frozen73 Case certificate",
+      "status": "PASS",
+      "task_failures": 0,
+      "task_successes": 10
+    }
+  ],
+  "first_original_probes": [
+    {
+      "complete_official_repeats": false,
+      "gate": "BLOCKED",
+      "official_score": null,
+      "ordinal": 0,
+      "public_target_label": "blue_mug_on_table_000",
+      "results": [
+        {
+          "C1_violations": 0,
+          "P1": false,
+          "P2": false,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "first",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.00043332576751708984
+        },
+        {
+          "C1_violations": 0,
+          "P1": false,
+          "P2": false,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "final",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.00043332576751708984
+        }
+      ],
+      "scope": "original frozen Case, legal isolated public-goal Skill, one true first/final pair; not performance evaluation"
+    },
+    {
+      "complete_official_repeats": false,
+      "gate": "BLOCKED",
+      "official_score": null,
+      "ordinal": 1,
+      "public_target_label": "bunch_of_red_grapes_on_table_000",
+      "results": [
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 513,
+          "error_category": "SKILL_OR_INTERFACE_SkillTimeout",
+          "execution": "error",
+          "health_flags": [],
+          "health_frames": 6156,
+          "mode": "first",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0
+        },
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 487,
+          "error_category": "SKILL_OR_INTERFACE_SkillTimeout",
+          "execution": "error",
+          "health_flags": [],
+          "health_frames": 5844,
+          "mode": "final",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0
+        }
+      ],
+      "scope": "original frozen Case, legal isolated public-goal Skill, one true first/final pair; not performance evaluation"
+    },
+    {
+      "complete_official_repeats": false,
+      "gate": "BLOCKED",
+      "official_score": null,
+      "ordinal": 2,
+      "public_target_label": "green_scissors_on_coffee_table_000",
+      "results": [
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 740,
+          "error_category": "SKILL_OR_INTERFACE_SkillTimeout",
+          "execution": "error",
+          "health_flags": [
+            "CONTACT_IMPULSE_ALERT"
+          ],
+          "health_frames": 8880,
+          "mode": "first",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0
+        },
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 743,
+          "error_category": "SKILL_OR_INTERFACE_SkillTimeout",
+          "execution": "error",
+          "health_flags": [
+            "CONTACT_IMPULSE_ALERT"
+          ],
+          "health_frames": 8916,
+          "mode": "final",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0
+        }
+      ],
+      "scope": "original frozen Case, legal isolated public-goal Skill, one true first/final pair; not performance evaluation"
+    }
+  ],
+  "retested_original_probes": [
+    {
+      "complete_official_repeats": false,
+      "gate": "BLOCKED",
+      "official_score": null,
+      "ordinal": 1,
+      "public_target_label": "bunch_of_red_grapes_on_table_000",
+      "results": [
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 176.22184446221218,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "first",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0,
+          "tool_service_s": 159.55755118327215
+        },
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 178.21360998088494,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "final",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0,
+          "tool_service_s": 161.54145821742713
+        }
+      ],
+      "scope": "original frozen Case, legal isolated public-goal Skill, one true first/final pair; not performance evaluation"
+    },
+    {
+      "complete_official_repeats": false,
+      "gate": "BLOCKED",
+      "official_score": null,
+      "ordinal": 2,
+      "public_target_label": "green_scissors_on_coffee_table_000",
+      "results": [
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 117.26371058309451,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [
+            "CONTACT_IMPULSE_ALERT"
+          ],
+          "health_frames": 11376,
+          "mode": "first",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0,
+          "tool_service_s": 111.60839646495879
+        },
+        {
+          "C1_violations": 1,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 116.80151059292257,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [
+            "CONTACT_IMPULSE_ALERT"
+          ],
+          "health_frames": 11376,
+          "mode": "final",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.0,
+          "tool_service_s": 110.8737730756402
+        }
+      ],
+      "scope": "original frozen Case, legal isolated public-goal Skill, one true first/final pair; not performance evaluation"
+    }
+  ],
+  "rgb_probe": [
+    {
+      "complete_official_repeats": false,
+      "gate": "BLOCKED",
+      "official_score": null,
+      "ordinal": 0,
+      "public_target_label": "blue_mug_on_table_000",
+      "results": [
+        {
+          "C1_violations": 0,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 58.771680149715394,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "first",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.00043332576751708984,
+          "tool_service_s": 42.41639470215887
+        },
+        {
+          "C1_violations": 0,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 59.96709616109729,
+          "airborne_samples": 0,
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "final",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.00043332576751708984,
+          "tool_service_s": 42.99926148541272
+        }
+      ],
+      "scope": "original frozen Case, legal isolated public-goal Skill, one true first/final pair; not performance evaluation"
+    }
+  ],
+  "rgb_local_frame_probe": [
+    {
+      "complete_official_repeats": false,
+      "gate": "BLOCKED",
+      "official_score": null,
+      "ordinal": 0,
+      "public_target_label": "blue_mug_on_table_000",
+      "results": [
+        {
+          "C1_violations": 0,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 58.96743904193863,
+          "airborne_samples": 0,
+          "baseline_ik_residual": 0.46952645668781545,
+          "baseline_note": "public_goal_open_loop_prior",
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "first",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.00043332576751708984,
+          "tool_service_s": 41.99958881083876
+        },
+        {
+          "C1_violations": 0,
+          "P1": false,
+          "P2": false,
+          "active_wall_s": 59.41502430662513,
+          "airborne_samples": 0,
+          "baseline_ik_residual": 0.46952645668781545,
+          "baseline_note": "public_goal_open_loop_prior",
+          "bilateral_samples": 0,
+          "control_calls": 948,
+          "error_category": null,
+          "execution": "completed",
+          "health_flags": [],
+          "health_frames": 11376,
+          "mode": "final",
+          "nonfinite_frames": 0,
+          "peak_lift_m": 0.00043332576751708984,
+          "tool_service_s": 42.70052460907027
+        }
+      ],
+      "scope": "original frozen Case, legal isolated public-goal Skill, one true first/final pair; not performance evaluation"
+    }
+  ],
+  "frozen_integrity_after_tests": {
+    "manifest_sha256": "b2af8ad3301a81a5d1fa14780af41f4b0526d2f0a3f80bfb0f1b6911d02e2404",
+    "cases_checked": 73,
+    "case_bad": 0,
+    "assets_checked": 8470,
+    "asset_bad": 0,
+    "GT_numeric_case_fields_parsed": false
+  },
+  "operations": {
+    "production_worker_changed": false,
+    "official_services_changed": false,
+    "platform_callbacks": 0,
+    "public_player_directory_writes": 0,
+    "private_diagnostic_gpu": "0 for RGB only",
+    "initial_rejected_private_selection_script_executed": false,
+    "safe_selection_source": "existing Recorder public P2 object identifiers"
+  },
+  "readiness": "NOT_READY",
+  "protected_scoring_isolation_hash_checks": {
+    "frozen_scorer/mesa_eval.py": true,
+    "scoring_config.json": true,
+    "frozen73_profile.py": true,
+    "contract_extension.py": true,
+    "trusted_predicates.py": true,
+    "public_task_view.py": true,
+    "piper_agent.py": true,
+    "model/piper_sim.urdf": true,
+    "sandbox_bootstrap.py": true,
+    "sandbox_runtime.py": true,
+    "rpc.py": true
+  }
+}

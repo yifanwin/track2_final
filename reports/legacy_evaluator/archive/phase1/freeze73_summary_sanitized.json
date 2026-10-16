@@ -1,0 +1,29 @@
+{
+  "scope_cases": 73,
+  "source_scenes_audited": 78,
+  "per_case_audit_pass": 73,
+  "per_case_audit_fail": 0,
+  "errors_by_type": {},
+  "task_types": {
+    "pick_place": 73
+  },
+  "tiers": {
+    "loose": 12,
+    "standard": 53,
+    "strict": 8
+  },
+  "predicate_types": {
+    "P1": 73,
+    "P2": 73,
+    "P3": 73
+  },
+  "constraints": {
+    "non_target_displacement": 73
+  },
+  "unique_collision_assets_hash_verified": 8470,
+  "max_fixed_asset_root_residual_m": 4.440892098500626e-16,
+  "private_manifest_sha256": "1afa71deddfa582784a8f42a935eb1ae7a3f8eb4b8be32a9f088bd6b0cb07966",
+  "casebank_pin_sha256": "a6547b3f7f8c5b5242ef8b0e18d0fbb8ff660229f600545ddaafe0169fe662ff",
+  "frozen_v3_modified": false,
+  "official_semantics_approved": false
+}

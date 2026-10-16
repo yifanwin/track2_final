@@ -1,0 +1,107 @@
+{
+  "status": "PASS: REPRODUCED DIAGNOSTICS",
+  "comparisons": [
+    {
+      "variant": "baseline",
+      "runs": 3,
+      "identical_initial_repeats_equal_chain": false,
+      "peak_speed_m_s": [
+        231.02833559385473,
+        231.02833559385473,
+        0.8637260746136443
+      ],
+      "deep_contact_alert": [
+        5428,
+        5428,
+        null
+      ],
+      "velocity_limit_alert": [
+        5447,
+        5447,
+        null
+      ],
+      "nonfinite_frames": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "variant": "solver30_4",
+      "runs": 3,
+      "identical_initial_repeats_equal_chain": false,
+      "peak_speed_m_s": [
+        0.8103267820435268,
+        0.8103267820435268,
+        0.8486963439423156
+      ],
+      "deep_contact_alert": [
+        null,
+        null,
+        null
+      ],
+      "velocity_limit_alert": [
+        null,
+        null,
+        null
+      ],
+      "nonfinite_frames": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "variant": "contact2mm",
+      "runs": 3,
+      "identical_initial_repeats_equal_chain": false,
+      "peak_speed_m_s": [
+        1.3814841634228725,
+        1.3814841634228725,
+        1.2240336776466207
+      ],
+      "deep_contact_alert": [
+        null,
+        null,
+        null
+      ],
+      "velocity_limit_alert": [
+        null,
+        null,
+        null
+      ],
+      "nonfinite_frames": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "variant": "coacd8",
+      "runs": 3,
+      "identical_initial_repeats_equal_chain": false,
+      "peak_speed_m_s": [
+        0.8367884373327127,
+        0.8367884373327127,
+        0.8666309885658022
+      ],
+      "deep_contact_alert": [
+        null,
+        null,
+        null
+      ],
+      "velocity_limit_alert": [
+        null,
+        null,
+        null
+      ],
+      "nonfinite_frames": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "formal_reliability_acceptance": "NOT_READY: contact-shock criteria/parameters and world boundary approval pending",
+  "formal_parameters_changed": false
+}

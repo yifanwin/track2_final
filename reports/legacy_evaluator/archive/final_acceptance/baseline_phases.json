@@ -1,0 +1,88 @@
+{
+  "frames": 11160,
+  "control_steps": 930,
+  "phases": {
+    "settle": {
+      "frames": 480,
+      "max_speed_m_s": 0.11472479999065399,
+      "max_penetration_m": 0.0031775236129760742,
+      "max_point_impulse_Ns": 0.03569023683667183,
+      "max_joint_tracking_error": 0.002848327159881592,
+      "contact_free_frames": 0
+    },
+    "pregrasp": {
+      "frames": 1800,
+      "max_speed_m_s": 0,
+      "max_penetration_m": 0,
+      "max_point_impulse_Ns": 0.01868850365281105,
+      "max_joint_tracking_error": 0.048418402671813965,
+      "contact_free_frames": 0
+    },
+    "approach": {
+      "frames": 1296,
+      "max_speed_m_s": 0.6601499915122986,
+      "max_penetration_m": 0.005585117265582085,
+      "max_point_impulse_Ns": 3.1165430545806885,
+      "max_joint_tracking_error": 0.03269600868225098,
+      "contact_free_frames": 0
+    },
+    "close": {
+      "frames": 960,
+      "max_speed_m_s": 0.016650211066007614,
+      "max_penetration_m": 0.00022146478295326233,
+      "max_point_impulse_Ns": 0.04330732673406601,
+      "max_joint_tracking_error": 0.04942707344889641,
+      "contact_free_frames": 0
+    },
+    "lift": {
+      "frames": 1296,
+      "max_speed_m_s": 13.747817039489746,
+      "max_penetration_m": 0.021963149309158325,
+      "max_point_impulse_Ns": 8.070377349853516,
+      "max_joint_tracking_error": 0.05000000074505806,
+      "contact_free_frames": 372
+    },
+    "transfer": {
+      "frames": 1296,
+      "max_speed_m_s": 66.28632354736328,
+      "max_penetration_m": 0,
+      "max_point_impulse_Ns": 0,
+      "max_joint_tracking_error": 0.0182570219039917,
+      "contact_free_frames": 1296
+    },
+    "lower": {
+      "frames": 1296,
+      "max_speed_m_s": 119.21521759033203,
+      "max_penetration_m": 0,
+      "max_point_impulse_Ns": 0,
+      "max_joint_tracking_error": 0.02966928482055664,
+      "contact_free_frames": 1296
+    },
+    "release": {
+      "frames": 720,
+      "max_speed_m_s": 148.63536071777344,
+      "max_penetration_m": 0,
+      "max_point_impulse_Ns": 0,
+      "max_joint_tracking_error": 0.0031031519174575806,
+      "contact_free_frames": 720
+    },
+    "retreat": {
+      "frames": 1296,
+      "max_speed_m_s": 201.60060119628906,
+      "max_penetration_m": 0,
+      "max_point_impulse_Ns": 0,
+      "max_joint_tracking_error": 0.029272079467773438,
+      "contact_free_frames": 1296
+    },
+    "stable": {
+      "frames": 720,
+      "max_speed_m_s": 231.02833557128906,
+      "max_penetration_m": 0,
+      "max_point_impulse_Ns": 0,
+      "max_joint_tracking_error": 1.0967254638671875e-05,
+      "contact_free_frames": 720
+    }
+  },
+  "late_contact_free_gravity_residual_max_m_s2": 0.0007910156249995026,
+  "interpretation": "velocity thresholds are diagnostic flags, NOT numerical-divergence proof or scoring policy"
+}

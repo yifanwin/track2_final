@@ -1,0 +1,114 @@
+"""Judge-only fail-closed artifact gate. Task failure is a valid verified outcome.
+
+Execution faults, missing evidence and integrity failures never issue a score.
+The receipt is written only after trusted independent predicate replay succeeds.
+No network or production callback is implemented.
+"""
+import hashlib
+import json
+import math
+import os
+import sys
+from pathlib import Path
+
+SCHEMA='track2-result-gate-v1'
+
+def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def canonical(value): return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+def atomic_json(path, value):
+    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+    temp=path.with_name(path.name+'.pending')
+    with temp.open('w',encoding='utf8') as stream:
+        json.dump(value,stream,allow_nan=False,sort_keys=True);stream.flush();os.fsync(stream.fileno())
+    temp.chmod(0o600);os.replace(temp,path)
+
+def block(output, reason):
+    result={'schema':SCHEMA,'status':'BLOCKED','publishable':False,'reasons':[reason],
+            'score_100':None,'official_score':None}
+    try:atomic_json(Path(output)/'result_gate.json',result)
+    except OSError:
+        result['reasons'].append('ARTIFACT_STORAGE_FAILURE')
+        sys.stderr.write(json.dumps(result)+'\n')
+    return result
+
+def write_receipt(output, score_name, *, expected_runs, verifier):
+    root=Path(output)
+    names=['suite.json','runs.json','artifacts/evidence.json','artifacts/runner_manifest.json',
+           'diagnosis.json',score_name]
+    runs=json.loads((root/'runs.json').read_text())['runs']
+    names += [r[k] for r in runs for k in ('initial_layout','final_layout')]
+    names += ['extension_private_evidence.json'] if verifier=='trusted_contract_extension' else []
+    receipt={'schema':'track2-verification-receipt-v1','verified':True,'verifier':verifier,
+             'expected_runs':expected_runs,
+             'artifact_sha256':{n:sha(root/n) for n in names}}
+    atomic_json(root/'verification_receipt.json',receipt)
+
+class ResultGate:
+    def __init__(self, source=None): self.source=Path(source or __file__).resolve().parent if source is None else Path(source).resolve()
+    def check(self, output):
+        root=Path(output).resolve();reasons=[];score=None
+        def reject(code):
+            if code not in reasons: reasons.append(code)
+        try:
+            if os.name=='posix' and (root.stat().st_uid!=os.getuid() or root.stat().st_mode&0o077): reject('OUTPUT_PERMISSIONS')
+            required=['suite.json','runs.json','diagnosis.json','artifacts/evidence.json',
+                      'artifacts/runner_manifest.json','verification_receipt.json']
+            for rel in required:
+                p=root/rel
+                if p.is_symlink() or not p.is_file(): reject('MISSING_'+rel.replace('/','_').upper())
+            if reasons: raise ValueError('required evidence absent')
+            suite=json.loads((root/'suite.json').read_text());runs=json.loads((root/'runs.json').read_text())['runs']
+            diagnosis=json.loads((root/'diagnosis.json').read_text());evidence=json.loads((root/'artifacts/evidence.json').read_text())
+            receipt=json.loads((root/'verification_receipt.json').read_text());record_manifest=json.loads((root/'artifacts/runner_manifest.json').read_text())
+            expected=len(suite['tasks'])*suite['config']['repeats']*2
+            if receipt.get('schema')!='track2-verification-receipt-v1' or receipt.get('verified') is not True or receipt.get('expected_runs')!=expected or receipt.get('verifier') not in ('trusted_contract_extension','frozen_v3'): reject('VERIFIER_FAILED')
+            if len(runs)!=expected or record_manifest.get('run_count')!=expected or len(evidence.get('runs',[]))!=expected: reject('RECORDER_INCOMPLETE')
+            if len(diagnosis.get('episodes',[]))!=expected or any(e.get('status') not in ('success','failure') for e in diagnosis.get('episodes',[])): reject('EXECUTION_EXCEPTION')
+            if diagnosis.get('scoring_status') not in ('FROZEN_AUTHOR_PDF_RULES',None) or diagnosis.get('candidate_status') in ('EXECUTION_FAILURE',): reject('EXECUTION_EXCEPTION')
+            ledger=receipt.get('artifact_sha256',{})
+            for rel in required[:-1]:
+                if rel not in ledger: reject('RECEIPT_INCOMPLETE')
+            for rel,expected_hash in ledger.items():
+                p=root/rel
+                if Path(rel).is_absolute() or '..' in Path(rel).parts or p.is_symlink() or root not in p.resolve().parents:
+                    reject('EVIDENCE_PATH_REJECTED');continue
+                if not p.is_file() or sha(p)!=expected_hash: reject('EVIDENCE_HASH_MISMATCH')
+            by_id={e['run_id']:e for e in evidence.get('runs',[])};seen=set();paired={};tasks={t['task_id']:t for t in suite['tasks']}
+            for run in runs:
+                key=(run['task_id'],run['mode'],run['seed'])
+                if key in seen or run['mode'] not in ('first','final') or run['task_id'] not in tasks: reject('RUN_IDENTITY_INVALID')
+                seen.add(key);ev=by_id.get(run['run_id'],{});verification=ev.get('verification',{})
+                if ev.get('status') not in ('success','failure') or ev.get('error'): reject('EXECUTION_EXCEPTION')
+                if verification.get('status') not in ('success','failure') or not isinstance(verification.get('predicates'),list) or not verification['predicates'] or any(p.get('status') not in ('success','failure') for p in verification['predicates']): reject('VERIFIER_FAILED')
+                if type(run.get('elapsed_s')) not in (int,float) or not math.isfinite(run['elapsed_s']) or run['elapsed_s']<=0: reject('TIMING_INVALID')
+                if type(run.get('plan_revisions')) is not int or not 0<=run['plan_revisions']<=(0 if run['mode']=='first' else suite['config']['replan_budget']): reject('REPLAN_INVALID')
+                names=set()
+                for field in ('initial_layout','final_layout'):
+                    rel=run[field];p=root/rel
+                    if rel not in ledger or p.is_symlink() or root not in p.resolve().parents: reject('STATE_INCOMPLETE');continue
+                    value=json.loads(p.read_text());objects=value.get('objects',[])
+                    actual={o['instance'] for o in objects}
+                    goal={o['instance'] for o in tasks[run['task_id']]['target_layout']['objects']}
+                    if not objects or len(actual)!=len(objects) or actual!=goal: reject('STATE_INCOMPLETE')
+                    for o in objects:
+                        if len(o.get('position',[]))!=3 or len(o.get('rotation',[]))!=4 or any(type(x) not in (int,float) or not math.isfinite(x) for x in o['position']+o['rotation']): reject('STATE_INCOMPLETE')
+                    if field=='initial_layout':names=canonical(value)
+                pair=(run['task_id'],run['seed']);paired.setdefault(pair,{})[run['mode']]=names
+            if any(set(v)!= {'first','final'} or v['first']!=v['final'] for v in paired.values()): reject('PAIRED_STATE_INVALID')
+            score_name='extension_candidate_score.json' if 'extension_candidate_score.json' in ledger else 'frozen_score_diagnostic.json'
+            if score_name not in ledger: reject('SCORER_OUTPUT_MISSING')
+            else:
+                report=json.loads((root/score_name).read_text());score=report.get('frozen_rule_score_100',report.get('score_100'))
+                if type(score) not in (int,float) or not math.isfinite(score) or not 0<=score<=100: reject('SCORER_OUTPUT_INVALID')
+            if diagnosis.get('gt_access_status')!='PASS': reject('GT_READ_EXCEPTION')
+        except Exception as exc:
+            reject('GATE_EVIDENCE_ERROR_'+type(exc).__name__)
+        result={'schema':SCHEMA,'status':'PASS' if not reasons else 'BLOCKED','publishable':not reasons,
+                'reasons':reasons,'score_100':score if not reasons else None,'official_score':None,
+                'receipt_sha256':sha(root/'verification_receipt.json') if (root/'verification_receipt.json').is_file() else None}
+        try:atomic_json(root/'result_gate.json',result)
+        except OSError:
+            result.update(status='BLOCKED',publishable=False,score_100=None)
+            result['reasons'].append('ARTIFACT_STORAGE_FAILURE')
+            sys.stderr.write(json.dumps(result)+'\n')
+        return result

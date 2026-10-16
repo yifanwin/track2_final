@@ -1,0 +1,63 @@
+{
+  "tests": [
+    {
+      "test": "required_predicates_single_arm",
+      "status": "PASS",
+      "detail": "PDF mapping enforced; optional C1 not forced; dual arm rejected"
+    },
+    {
+      "test": "partial_threshold_exact",
+      "status": "PASS",
+      "detail": "exact Fraction completion, threshold .6; no new weights in total formula"
+    },
+    {
+      "test": "actual_frozen_P2_equivalence_150",
+      "status": "PASS",
+      "detail": {
+        "comparisons": 150,
+        "max_pose_error_difference": 0
+      }
+    },
+    {
+      "test": "PDF_formula_frozen_summary_300",
+      "status": "PASS",
+      "detail": {
+        "random_paired_summaries": 300,
+        "max_PDF_formula_difference": 2.220446049250313e-16,
+        "aggregator": "unmodified V3.summarize actually called"
+      }
+    },
+    {
+      "test": "P3_six_candidate_relations",
+      "status": "PASS",
+      "detail": "all six explicitly defined relations; concave containers not silently accepted"
+    },
+    {
+      "test": "P4_approved_registry",
+      "status": "PASS",
+      "detail": "pinned judge registry required; unknown/forged labels not PASS"
+    },
+    {
+      "test": "C1_missing_evidence_refusal",
+      "status": "PASS",
+      "detail": "missing trusted collision evidence refuses scoring"
+    },
+    {
+      "test": "P5_sequence_no_fabricated_score",
+      "status": "PASS",
+      "detail": "P5 no standalone weight; ordered trusted samples; invalid recovery scoring edge requires approval"
+    },
+    {
+      "test": "configuration_preservation",
+      "status": "PASS",
+      "detail": "caller reference time/threshold preserved; tier values globally fixed"
+    },
+    {
+      "test": "P5_pose_checkpoint",
+      "status": "PASS",
+      "detail": "P2 checkpoints use actual canonical position/quaternion, not Skill claims"
+    }
+  ],
+  "formal_status": "approval required for extension semantics",
+  "frozen_source_changed": false
+}

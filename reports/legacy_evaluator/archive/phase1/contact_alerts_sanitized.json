@@ -1,0 +1,70 @@
+{
+  "alert_count": 4,
+  "cases_affected": 2,
+  "alerts": [
+    {
+      "alias": "material_015",
+      "configuration": "candidate30_4",
+      "onset_substep": 32,
+      "diagnostic_peak_impulse_Ns": 1.2715656453386353,
+      "strongest_contact_categories": [
+        "dynamic_scene",
+        "static_scene"
+      ],
+      "max_window_penetration_m": 3.9571430534124374e-05,
+      "max_window_dynamic_speed_m_s": 1.2671250104904175,
+      "max_window_joint_vel_rad_s": 0.0,
+      "max_window_target_error_rad": 0.0,
+      "control_phase": "hold",
+      "evidence_scope": "recorded PhysX substeps; no solver-divergence conclusion"
+    },
+    {
+      "alias": "material_067",
+      "configuration": "candidate30_4",
+      "onset_substep": 128,
+      "diagnostic_peak_impulse_Ns": 1.2919613061541348,
+      "strongest_contact_categories": [
+        "dynamic_scene",
+        "dynamic_scene"
+      ],
+      "max_window_penetration_m": 7.769834269311104e-07,
+      "max_window_dynamic_speed_m_s": 1.398511274994979,
+      "max_window_joint_vel_rad_s": 0.004825477954000235,
+      "max_window_target_error_rad": 0.000500000000000167,
+      "control_phase": "legal_micro_joint_motion",
+      "evidence_scope": "recorded PhysX substeps; no solver-divergence conclusion"
+    },
+    {
+      "alias": "material_015",
+      "configuration": "candidate30_4_seed1",
+      "onset_substep": 32,
+      "diagnostic_peak_impulse_Ns": 1.2715656453386353,
+      "strongest_contact_categories": [
+        "dynamic_scene",
+        "static_scene"
+      ],
+      "max_window_penetration_m": 3.9571430534124374e-05,
+      "max_window_dynamic_speed_m_s": 1.2671250104904175,
+      "max_window_joint_vel_rad_s": 0.0,
+      "max_window_target_error_rad": 0.0,
+      "control_phase": "hold",
+      "evidence_scope": "recorded PhysX substeps; no solver-divergence conclusion"
+    },
+    {
+      "alias": "material_067",
+      "configuration": "candidate30_4_seed1",
+      "onset_substep": 126,
+      "diagnostic_peak_impulse_Ns": 1.4458262072954131,
+      "strongest_contact_categories": [
+        "dynamic_scene",
+        "dynamic_scene"
+      ],
+      "max_window_penetration_m": 9.560675380271277e-07,
+      "max_window_dynamic_speed_m_s": 1.4068353026052371,
+      "max_window_joint_vel_rad_s": 0.0038986236322671175,
+      "max_window_target_error_rad": 0.000500000000000167,
+      "control_phase": "legal_micro_joint_motion",
+      "evidence_scope": "recorded PhysX substeps; no solver-divergence conclusion"
+    }
+  ]
+}

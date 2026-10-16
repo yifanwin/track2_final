@@ -1,0 +1,162 @@
+{
+  "source": "https://github.com/agilexrobotics/agx_arm_urdf",
+  "commit": "983788b58d7eae76511177f768d85877534917fe",
+  "license": "MIT License\n\nCopyright (c) 2026 aalicecc\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+  "urdf_sha256": "3bb816d6841272890f43985b83181ed5a82a04f8ecaf4ec781a4a77faa29b664",
+  "links": [
+    {
+      "name": "world",
+      "mass_kg": null,
+      "inertial_xml": null,
+      "collision_count": 0
+    },
+    {
+      "name": "base_link",
+      "mass_kg": 1.02,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"-0.00473641164191482 2.56829134630247E-05 0.041451518036016\" rpy=\"0 0 0\" />\n            <mass value=\"1.02\" />\n            <inertia ixx=\"0.00267433\" ixy=\"-0.00000073\" ixz=\"-0.00017389\" iyy=\"0.00282612\" iyz=\"0.0000004\" izz=\"0.00089624\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "link1",
+      "mass_kg": 0.71,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"0.00032 -0.00041 -0.00348\" rpy=\"0 0 0\" />\n            <mass value=\"0.71\" />\n            <inertia ixx=\"0.00050027\" ixy=\"0.00000078\" ixz=\"0.00000626\" iyy=\"0.00040879\" iyz=\"0.00000462\" izz=\"0.00045802\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "link2",
+      "mass_kg": 1.16,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"0.21852 -0.00861 0.00126\" rpy=\"0 0 0\" />\n            <mass value=\"1.16\" />\n            <inertia ixx=\"0.00111915\" ixy=\"0.00182916\" ixz=\"0.00019233\" iyy=\"0.06763251\" iyz=\"0.00000767\" izz=\"0.067559\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "link3",
+      "mass_kg": 0.5,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"-0.01999 -0.14808 -0.00053\" rpy=\"0 0 0\" />\n            <mass value=\"0.5\" />\n            <inertia ixx=\"0.01347608\" ixy=\"0.00161034\" ixz=\"0.00000066\" iyy=\"0.00046377\" iyz=\"0.00000162\" izz=\"0.01363321\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "link4",
+      "mass_kg": 0.38,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"0.00013 -0.00076 -0.00394\" rpy=\"0 0 0\" />\n            <mass value=\"0.38\" />\n            <inertia ixx=\"0.00017844\" ixy=\"0.00000062\" ixz=\"0.00000067\" iyy=\"0.00018914\" iyz=\"0.00000408\" izz=\"0.00014613\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "link5",
+      "mass_kg": 0.383,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"0.00018 -0.06104 -0.00227\" rpy=\"0 0 0\" />\n            <mass value=\"0.383\" />\n            <inertia ixx=\"0.00172318\" ixy=\"0.00000259\" ixz=\"0.00000010\" iyy=\"0.00017936\" iyz=\"0.00000990\" izz=\"0.00171172\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "link6",
+      "mass_kg": 0.00613114124,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"-0.00003 0.00006 -0.002\" rpy=\"0 0 0\" />\n            <mass value=\"0.00613114124\" />\n            <inertia ixx=\"5.9675161577e-07\" ixy=\"0.0\" ixz=\"0.0\" iyy=\"5.6193081438e-07\" iyz=\"0.0\" izz=\"1.02183419594e-06\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "flange_link",
+      "mass_kg": 0.04,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"1.151691e-03 0.782428e-03 4.798051e-03\" rpy=\"0 0 0\" />\n            <mass value=\"0.04\" />\n            <inertia ixx=\"9.935389e-06\" ixy=\"0.0\" ixz=\"0.0\" iyy=\"10.508003e-06\" iyz=\"0.0\" izz=\"19.652873e-06\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "gripper_base",
+      "mass_kg": 0.45,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"-0.000183807162235591 8.05033155577911E-05 0.0321436689908876\" rpy=\"0 0 0\" />\n            <mass value=\"0.45\" />\n            <inertia ixx=\"0.000466573035886\" ixy=\"0\" ixz=\"0\" iyy=\"0.000208671755285\" iyz=\"0\" izz=\"0.000443517627645\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "gripper_link1",
+      "mass_kg": 0.025,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"0.00065123185041968 -0.0491929869131989 0.00972258769184025\" rpy=\"0 0 0\" />\n            <mass value=\"0.025\" />\n            <inertia ixx=\"1.0831334372e-05\" ixy=\"3.32108655243e-07\" ixz=\"-5.17776964242e-08\" iyy=\"5.43941050918e-06\" iyz=\"1.75746071559e-06\" izz=\"1.41828415054e-05\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "gripper_link2",
+      "mass_kg": 0.025,
+      "inertial_xml": "<inertial>\n            <origin xyz=\"0.00065123185041968 -0.0491929869131989 0.00972258769184025\" rpy=\"0 0 0\" />\n            <mass value=\"0.025\" />\n            <inertia ixx=\"1.0831334372e-05\" ixy=\"3.32108655243e-07\" ixz=\"-5.17776964242e-08\" iyy=\"5.43941050918e-06\" iyz=\"1.75746071559e-06\" izz=\"1.41828415054e-05\" />\n        </inertial>\n        ",
+      "collision_count": 1
+    },
+    {
+      "name": "diagnostic_tcp",
+      "mass_kg": null,
+      "inertial_xml": null,
+      "collision_count": 0
+    }
+  ],
+  "joints": [
+    {
+      "name": "world_to_base_link",
+      "type": "fixed",
+      "xml": "<joint name=\"world_to_base_link\" type=\"fixed\">\n        <parent link=\"world\" />\n        <child link=\"base_link\" />\n        <origin xyz=\"0 0 0\" rpy=\"0 0 0\" />\n    </joint>\n    "
+    },
+    {
+      "name": "joint1",
+      "type": "revolute",
+      "xml": "<joint name=\"joint1\" type=\"revolute\">\n        <origin xyz=\"0 0 0.123\" rpy=\"0 0 0\" />\n        <parent link=\"base_link\" />\n        <child link=\"link1\" />\n        <axis xyz=\"0 0 1\" />\n        <limit lower=\"-2.6179938\" upper=\"2.6179938\" effort=\"100\" velocity=\"5\" />\n    </joint>\n    "
+    },
+    {
+      "name": "joint2",
+      "type": "revolute",
+      "xml": "<joint name=\"joint2\" type=\"revolute\">\n        <origin xyz=\"0 0 0\" rpy=\"1.5707963 -0.1357866 -3.1415926\" />\n        <parent link=\"link1\" />\n        <child link=\"link2\" />\n        <axis xyz=\"0 0 1\" />\n        <limit lower=\"0\" upper=\"3.1415926\" effort=\"100\" velocity=\"5\" />\n    </joint>\n    "
+    },
+    {
+      "name": "joint3",
+      "type": "revolute",
+      "xml": "<joint name=\"joint3\" type=\"revolute\">\n        <origin xyz=\"0.28503 0 0\" rpy=\"0 0 -1.7938494\" />\n        <parent link=\"link2\" />\n        <child link=\"link3\" />\n        <axis xyz=\"0 0 1\" />\n        <limit lower=\"-2.9670597\" upper=\"0\" effort=\"100\" velocity=\"5\" />\n    </joint>\n    "
+    },
+    {
+      "name": "joint4",
+      "type": "revolute",
+      "xml": "<joint name=\"joint4\" type=\"revolute\">\n        <origin xyz=\"-0.02198 -0.25075 0\" rpy=\"1.5707963 0 0\" />\n        <parent link=\"link3\" />\n        <child link=\"link4\" />\n        <axis xyz=\"0 0 1\" />\n        <limit lower=\"-1.7453292\" upper=\"1.7453292\" effort=\"100\" velocity=\"5\" />\n    </joint>\n    "
+    },
+    {
+      "name": "joint5",
+      "type": "revolute",
+      "xml": "<joint name=\"joint5\" type=\"revolute\">\n        <origin xyz=\"0 0 0\" rpy=\"-1.5707963 0 0\" />\n        <parent link=\"link4\" />\n        <child link=\"link5\" />\n        <axis xyz=\"0 0 1\" />\n        <limit lower=\"-1.2217304\" upper=\"1.2217304\" effort=\"100\" velocity=\"5\" />\n    </joint>\n    "
+    },
+    {
+      "name": "joint6",
+      "type": "revolute",
+      "xml": "<joint name=\"joint6\" type=\"revolute\">\n        <origin xyz=\"8.8259E-05 -0.091 0\" rpy=\"1.5707963 0 0\" />\n        <parent link=\"link5\" />\n        <child link=\"link6\" />\n        <axis xyz=\"0 0 1\" />\n        <limit lower=\"-2.0943951\" upper=\"2.0943951\" effort=\"100\" velocity=\"5\" />\n    </joint>\n"
+    },
+    {
+      "name": "flange_joint",
+      "type": "fixed",
+      "xml": "<joint name=\"flange_joint\" type=\"fixed\">\n        <origin xyz=\"0 0 0\" rpy=\"0 0 0\" />\n        <parent link=\"link6\" />\n        <child link=\"flange_link\" />\n    </joint>\n    "
+    },
+    {
+      "name": "gripper_base_joint",
+      "type": "fixed",
+      "xml": "<joint name=\"gripper_base_joint\" type=\"fixed\">\n        <origin xyz=\"0 0 0.0045\" rpy=\"0 0 0\" />\n        <parent link=\"flange_link\" />\n        <child link=\"gripper_base\" />\n    </joint>\n    "
+    },
+    {
+      "name": "gripper_joint1",
+      "type": "prismatic",
+      "xml": "<joint name=\"gripper_joint1\" type=\"prismatic\">\n        <origin xyz=\"0 0 0.138\" rpy=\"1.5707963 0 0\" />\n        <parent link=\"gripper_base\" />\n        <child link=\"gripper_link1\" />\n        <axis xyz=\"0 0 1\" />\n        <limit lower=\"0\" upper=\"0.05\" effort=\"10\" velocity=\"3\" />\n        </joint>\n    "
+    },
+    {
+      "name": "gripper_joint2",
+      "type": "prismatic",
+      "xml": "<joint name=\"gripper_joint2\" type=\"prismatic\">\n        <origin xyz=\"0 0 0.138\" rpy=\"1.5707963 0 -3.1415926\" />\n        <parent link=\"gripper_base\" />\n        <child link=\"gripper_link2\" />\n        <axis xyz=\"0 0 -1\" />\n        <limit lower=\"-0.05\" upper=\"0\" effort=\"10\" velocity=\"3\" />\n        </joint>\n"
+    },
+    {
+      "name": "diagnostic_tcp_fixed",
+      "type": "fixed",
+      "xml": "<joint name=\"diagnostic_tcp_fixed\" type=\"fixed\"><parent link=\"gripper_base\" /><child link=\"diagnostic_tcp\" /><origin xyz=\"0 0 0.136166269\" rpy=\"0 0 0\" /></joint>"
+    }
+  ],
+  "modifications": [
+    "expanded one static xacro include",
+    "removed massless virtual aperture joint; physical fingers retained and mimic implemented in action mapping",
+    "visual DAE replaced by matching upstream STL",
+    "added massless fixed diagnostic TCP at gripper_base z=0.18m; diagnostic reference, not manufacturer calibration"
+  ],
+  "hardware_control_gains_available": false,
+  "simulation_gains": "arm Kp=2000 Kd=100 effort<=100Nm; fingers Kp=1000 Kd=50 effort<=10N; simulation tuning only",
+  "finger_opening_m": [
+    0,
+    0.1
+  ],
+  "arm_dof": 6,
+  "physical_finger_dof": 2
+}

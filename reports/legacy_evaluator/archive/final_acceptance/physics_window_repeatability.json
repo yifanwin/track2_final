@@ -1,0 +1,30 @@
+[
+  {
+    "variant": "baseline",
+    "matched_private_window_frames": 147,
+    "max_numeric_state_difference": 0,
+    "status": "PASS",
+    "scope": "recorded windows only; raw contact ordering/hash not bitwise-equal; no full trajectory equality claim"
+  },
+  {
+    "variant": "solver30_4",
+    "matched_private_window_frames": 32,
+    "max_numeric_state_difference": 0,
+    "status": "PASS",
+    "scope": "recorded windows only; raw contact ordering/hash not bitwise-equal; no full trajectory equality claim"
+  },
+  {
+    "variant": "contact2mm",
+    "matched_private_window_frames": 32,
+    "max_numeric_state_difference": 0,
+    "status": "PASS",
+    "scope": "recorded windows only; raw contact ordering/hash not bitwise-equal; no full trajectory equality claim"
+  },
+  {
+    "variant": "coacd8",
+    "matched_private_window_frames": 32,
+    "max_numeric_state_difference": 0,
+    "status": "PASS",
+    "scope": "recorded windows only; raw contact ordering/hash not bitwise-equal; no full trajectory equality claim"
+  }
+]

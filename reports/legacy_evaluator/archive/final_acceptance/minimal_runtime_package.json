@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "checks": {
+    "hidden_gt": "PASS",
+    "hidden_suite": "PASS",
+    "score": "PASS",
+    "trajectory": "PASS",
+    "package_modify": "PASS",
+    "host_modify": "PASS",
+    "proc_escape": "PASS",
+    "private_environment": "PASS"
+  },
+  "original_manifest_lifecycle": [
+    "ready",
+    "initialize",
+    "run",
+    "shutdown"
+  ],
+  "canaries_unchanged": true,
+  "scope": "synthetic adversary inside actual read-only package/host mounts; not security certification"
+}

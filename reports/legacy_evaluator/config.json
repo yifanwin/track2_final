@@ -1,0 +1,8 @@
+{
+  "readiness": "NOT_READY",
+  "official_score": null,
+  "input_contract": "WAIT_CONFIRM_INPUT_CONTRACT",
+  "production_switch": "NOT AUTHORIZED",
+  "result_gate": "mandatory",
+  "physical_feasibility": "synthetic positive controls PASS; original TTG success not proven"
+}

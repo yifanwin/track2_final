@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "source_goal_layouts_unchanged": 73,
+  "objects_checked": 448,
+  "hulls_checked": 8470,
+  "max_world_vertex_difference_m": 1.7763568394002505e-15,
+  "max_canonical_root_inverse_difference_m": 1.1379786002407855e-15,
+  "scoring_reference": "candidate fixed collision-bounds center, approval required; source canonical root still preserved privately",
+  "not_frozen_task_semantics_compatibility_claim": true
+}

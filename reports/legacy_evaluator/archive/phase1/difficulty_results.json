@@ -1,0 +1,232 @@
+{
+  "status": "PASS: MEASURED DISTRIBUTIONS",
+  "actual_strategy_results": [
+    {
+      "tier": "loose",
+      "strategy": "hold",
+      "episodes": 10,
+      "actual_robot_physics": true,
+      "candidate_score_100": 30.0,
+      "SR_first": 0.0,
+      "SR_final": 0.0,
+      "components": {
+        "final": 0.0,
+        "first": 0.0,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "strict_success": 0
+    },
+    {
+      "tier": "loose",
+      "strategy": "weak_joint_motion",
+      "episodes": 10,
+      "actual_robot_physics": true,
+      "candidate_score_100": 30.0,
+      "SR_first": 0.0,
+      "SR_final": 0.0,
+      "components": {
+        "final": 0.0,
+        "first": 0.0,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "strict_success": 0
+    },
+    {
+      "tier": "standard",
+      "strategy": "hold",
+      "episodes": 10,
+      "actual_robot_physics": true,
+      "candidate_score_100": 30.0,
+      "SR_first": 0.0,
+      "SR_final": 0.0,
+      "components": {
+        "final": 0.0,
+        "first": 0.0,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "strict_success": 0
+    },
+    {
+      "tier": "standard",
+      "strategy": "weak_joint_motion",
+      "episodes": 10,
+      "actual_robot_physics": true,
+      "candidate_score_100": 30.0,
+      "SR_first": 0.0,
+      "SR_final": 0.0,
+      "components": {
+        "final": 0.0,
+        "first": 0.0,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "strict_success": 0
+    },
+    {
+      "tier": "strict",
+      "strategy": "hold",
+      "episodes": 10,
+      "actual_robot_physics": true,
+      "candidate_score_100": 30.0,
+      "SR_first": 0.0,
+      "SR_final": 0.0,
+      "components": {
+        "final": 0.0,
+        "first": 0.0,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "strict_success": 0
+    },
+    {
+      "tier": "strict",
+      "strategy": "weak_joint_motion",
+      "episodes": 10,
+      "actual_robot_physics": true,
+      "candidate_score_100": 30.0,
+      "SR_first": 0.0,
+      "SR_final": 0.0,
+      "components": {
+        "final": 0.0,
+        "first": 0.0,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "strict_success": 0
+    }
+  ],
+  "mathematical_threshold_calibration": [
+    {
+      "tier": "loose",
+      "error_cm": 1,
+      "completion": 1.0,
+      "s": 1.0,
+      "score_100": 100.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "loose",
+      "error_cm": 2.5,
+      "completion": 1.0,
+      "s": 1.0,
+      "score_100": 100.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "loose",
+      "error_cm": 4,
+      "completion": 1.0,
+      "s": 1.0,
+      "score_100": 100.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "loose",
+      "error_cm": 6,
+      "completion": 0.3333333333333333,
+      "s": 0,
+      "score_100": 30.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "loose",
+      "error_cm": 12,
+      "completion": 0.3333333333333333,
+      "s": 0,
+      "score_100": 30.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "standard",
+      "error_cm": 1,
+      "completion": 1.0,
+      "s": 1.0,
+      "score_100": 100.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "standard",
+      "error_cm": 2.5,
+      "completion": 1.0,
+      "s": 1.0,
+      "score_100": 100.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "standard",
+      "error_cm": 4,
+      "completion": 0.6666666666666666,
+      "s": 0.6666666666666666,
+      "score_100": 76.66666666666667,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "standard",
+      "error_cm": 6,
+      "completion": 0.3333333333333333,
+      "s": 0,
+      "score_100": 30.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "standard",
+      "error_cm": 12,
+      "completion": 0.3333333333333333,
+      "s": 0,
+      "score_100": 30.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "strict",
+      "error_cm": 1,
+      "completion": 1.0,
+      "s": 1.0,
+      "score_100": 100.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "strict",
+      "error_cm": 2.5,
+      "completion": 0.6666666666666666,
+      "s": 0.6666666666666666,
+      "score_100": 76.66666666666667,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "strict",
+      "error_cm": 4,
+      "completion": 0.6666666666666666,
+      "s": 0.6666666666666666,
+      "score_100": 76.66666666666667,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "strict",
+      "error_cm": 6,
+      "completion": 0.3333333333333333,
+      "s": 0,
+      "score_100": 30.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    },
+    {
+      "tier": "strict",
+      "error_cm": 12,
+      "completion": 0.3333333333333333,
+      "s": 0,
+      "score_100": 30.0,
+      "evidence_type": "MATH_FIXTURE_ONLY, no physical execution claim"
+    }
+  ],
+  "physical_ability_separation": "NOT PROVEN: hold/weak motion did not manipulate target; inspect auxiliary-score concentration",
+  "official_scores": null,
+  "policy": "no weight/threshold/formula modified"
+}

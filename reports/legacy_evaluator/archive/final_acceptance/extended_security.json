@@ -1,0 +1,37 @@
+{
+  "scope": "synthetic malicious packages, real server namespaces; not exhaustive security certification",
+  "checks": {
+    "import_mani_skill": "PASS",
+    "import_sapien": "PASS",
+    "import_adapter": "PASS",
+    "import_frozen_scorer": "PASS",
+    "import_physics_health": "PASS",
+    "private_health_r": "PASS",
+    "private_health_w": "PASS",
+    "score_code_r": "PASS",
+    "score_code_w": "PASS",
+    "hidden_case_r": "PASS",
+    "hidden_case_w": "PASS",
+    "judge_environment_r": "PASS",
+    "judge_environment_w": "PASS",
+    "host_shell_absent": "PASS",
+    "proc_absent": "PASS",
+    "host_config_absent": "PASS",
+    "only_clean_environment": "PASS",
+    "judge_modules_absent": "PASS",
+    "runtime_readonly": "PASS",
+    "memory_limit": "PASS",
+    "file_limit": "PASS",
+    "fd_limit": "PASS",
+    "core_disabled": "PASS",
+    "canary_hashes_unchanged": "PASS",
+    "actual_cpu_limit": "PASS"
+  },
+  "cpu_evidence": {
+    "exit": -9,
+    "cpu_s": 30.014549,
+    "wall_s": 29.87537942873314,
+    "configured_s": 30
+  },
+  "status": "PASS"
+}

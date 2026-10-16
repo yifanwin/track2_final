@@ -1,0 +1,66 @@
+{
+  "status": "PASS",
+  "scope": "temporary original COLOR_0 restoration; not a new official asset",
+  "objects": [
+    {
+      "object": "blue_mug_on_table_000",
+      "source_sha256": "8400987c3488684a7eff9635a8227b9610b5363dfd068e3fabbdb5fd56f1e5a5",
+      "derived_sha256": "9993648d6b708b8dd7db344567fe4600b76ee4053da6330de803a6746962c0a8",
+      "geometry_max_error_m": 0.0,
+      "linear_color_quantization_max_error": 0.0041125140035388474,
+      "triangles": 785428,
+      "texture_size": [
+        5322,
+        5322
+      ],
+      "original_modified": false,
+      "collision_modified": false,
+      "world_bounds_max_error_m": 0.0
+    },
+    {
+      "object": "pink_bowl_on_table_000",
+      "source_sha256": "ad79e4cb19f231bbd0e48b22e63515df3e064ac29cc7e8af5a6afb1f6cbf30da",
+      "derived_sha256": "ecba540a315487b3cb31c4aa4d322ec264c833347c818d7eb8bd9cd1d035e1eb",
+      "geometry_max_error_m": 0.0,
+      "linear_color_quantization_max_error": 0.0041125140035388474,
+      "triangles": 383100,
+      "texture_size": [
+        3714,
+        3714
+      ],
+      "original_modified": false,
+      "collision_modified": false,
+      "world_bounds_max_error_m": 0.0
+    },
+    {
+      "object": "white_square_table_000",
+      "source_sha256": "816815edd5d47ab05ec0d3fabbde4dcced22f599ed1094e5879c25a0e6ea0118",
+      "derived_sha256": "2000140b239cf9fa7379eed3311df0463d7c4dbc06cdd519aa6d24a3a7cfb182",
+      "geometry_max_error_m": 0.0,
+      "linear_color_quantization_max_error": 0.0041125140035388474,
+      "triangles": 657096,
+      "texture_size": [
+        4866,
+        4866
+      ],
+      "original_modified": false,
+      "collision_modified": false,
+      "world_bounds_max_error_m": 0.0
+    },
+    {
+      "object": "black_box_on_table_000",
+      "source_sha256": "dca89e4211638713972bbd65e1c8bf45427a79b4100f7ffdba1f2d3c0f90cd44",
+      "derived_sha256": "f3f455eadac79c760f74a359d90a4db451e46e6ca3608e88c7dc141aa41db801",
+      "geometry_max_error_m": 0.0,
+      "linear_color_quantization_max_error": 0.0041125140035388474,
+      "triangles": 1073884,
+      "texture_size": [
+        6222,
+        6222
+      ],
+      "original_modified": false,
+      "collision_modified": false,
+      "world_bounds_max_error_m": 0.0
+    }
+  ]
+}

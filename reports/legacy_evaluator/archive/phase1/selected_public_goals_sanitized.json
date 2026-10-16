@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "case_count": 1,
+  "episodes": 10,
+  "paired_seeds": 5,
+  "skill": "internal trusted synthetic package",
+  "public_input_profile": "candidate-only documented target fields",
+  "real_piper_physics": true,
+  "candidate_score_100": 30.0,
+  "official_score": null,
+  "unapproved_diagnostics_explicit": true,
+  "production_callback_sent": false
+}

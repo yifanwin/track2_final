@@ -1,0 +1,7 @@
+{
+  "diagnostic_tcp_gripper_base_z_m": 0.136166269,
+  "v0_tcp_m": 0.18,
+  "derived_from": "mean inner-face distal narrow-end vertices of both engine-cooked finger shapes",
+  "physical_mesh_inertial_limits_modified": false,
+  "hardware_tcp_calibration": "NOT TESTED"
+}

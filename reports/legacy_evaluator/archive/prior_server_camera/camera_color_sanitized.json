@@ -1,0 +1,93 @@
+{
+  "status": "PASS",
+  "actual_TTG001_RGB": true,
+  "physical_gpu": "authorized GPU 0",
+  "physical_parameters_changed": false,
+  "reset_count": 3,
+  "continuous_frames": 9,
+  "frame_shapes": [
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ],
+    [
+      120,
+      160,
+      3
+    ]
+  ],
+  "frame_hashes": [
+    "0add840871f51ad97f0133b43b5def49b6228cd3951f711e0f7d7c24a41b74d6",
+    "ebc6c22dfbb049f6dc3b91879740456a73e1ef87eedb43540a6ff19911b6453b",
+    "b4cebfc1c465f45ff8be59a2f624304728efd2fa41bccfb0a692ce11561b7f22",
+    "0add840871f51ad97f0133b43b5def49b6228cd3951f711e0f7d7c24a41b74d6",
+    "ebc6c22dfbb049f6dc3b91879740456a73e1ef87eedb43540a6ff19911b6453b",
+    "b4cebfc1c465f45ff8be59a2f624304728efd2fa41bccfb0a692ce11561b7f22",
+    "0add840871f51ad97f0133b43b5def49b6228cd3951f711e0f7d7c24a41b74d6",
+    "ebc6c22dfbb049f6dc3b91879740456a73e1ef87eedb43540a6ff19911b6453b",
+    "b4cebfc1c465f45ff8be59a2f624304728efd2fa41bccfb0a692ce11561b7f22"
+  ],
+  "distinct_frame_hashes": 3,
+  "nonblank_std": [
+    82.35987022647636,
+    82.3380284318185,
+    82.33998353603963,
+    82.35987022647636,
+    82.3380284318185,
+    82.33998353603963,
+    82.35987022647636,
+    82.3380284318185,
+    82.33998353603963
+  ],
+  "isolated_skill_RGB_transfer": "PASS",
+  "CPU_torch_host_readback": "PASS",
+  "visual_hashes": {
+    "black_box_on_table_000": "f3f455eadac79c760f74a359d90a4db451e46e6ca3608e88c7dc141aa41db801",
+    "blue_mug_on_table_000": "9993648d6b708b8dd7db344567fe4600b76ee4053da6330de803a6746962c0a8",
+    "pink_bowl_on_table_000": "ecba540a315487b3cb31c4aa4d322ec264c833347c818d7eb8bd9cd1d035e1eb",
+    "white_square_table_000": "2000140b239cf9fa7379eed3311df0463d7c4dbc06cdd519aa6d24a3a7cfb182"
+  },
+  "imagery_release": "PRIVATE: original initial scene imagery not included in public evaluator ZIP",
+  "camera_pose": "judge-chosen diagnostic look_at; official camera config pending",
+  "production_ready": false,
+  "wall_s": 13.293,
+  "probe_exit": 0,
+  "authorized_gpu_index": 0,
+  "visual_source": "original COLOR_0 texture restoration; original assets/collisions unchanged"
+}

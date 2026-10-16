@@ -1,0 +1,75 @@
+{
+  "archive_sha256": "bb6ca83d187a7281a86ade59febaaf7e3427e10568045c7cd8a4fc2a40f43a95",
+  "frozen_scorer_sha256": "10f89dab4354a8d79094d69d60f9f36f311b70dc02c71c590cdc4c7c249a7cd4",
+  "tests": [
+    {
+      "test": "full_acceptance",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 129.133
+    },
+    {
+      "test": "frozen_scoring",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 0.114
+    },
+    {
+      "test": "contract",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 0.264
+    },
+    {
+      "test": "extension_physics",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 32.877
+    },
+    {
+      "test": "extension_security",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 6.588
+    },
+    {
+      "test": "worker_handoff",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 0.064
+    },
+    {
+      "test": "manifest_tamper",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 4.323
+    },
+    {
+      "test": "legacy_profile",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 3.774
+    },
+    {
+      "test": "public_view73",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 0.114
+    },
+    {
+      "test": "selected_actual",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 10.587
+    },
+    {
+      "test": "manifest_after",
+      "status": "PASS",
+      "exit": 0,
+      "wall_s": 0.114
+    }
+  ],
+  "private_data_in_source_zip": false,
+  "production_operations": 0,
+  "real_camera": "previous TTG001 evidence; not rerun or extended to all73"
+}

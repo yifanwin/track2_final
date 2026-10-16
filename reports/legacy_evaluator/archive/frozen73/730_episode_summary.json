@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "case_count": 73,
+  "completed_cases": 73,
+  "pass_cases": 73,
+  "fail_cases": 0,
+  "episodes": 730,
+  "frozen_rule_score_100": 30.0,
+  "strategy_scope": "internal legal-action weak Skill; not difficulty calibration",
+  "production_callback_sent": false,
+  "wall_s": 829.42
+}

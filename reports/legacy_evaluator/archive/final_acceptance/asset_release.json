@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "checks": {
+    "synthetic_approved_copy": "PASS",
+    "extras_rejected": "PASS",
+    "transform_rejected": "PASS",
+    "path_rejected": "PASS",
+    "missing_approval_rejected": "PASS"
+  },
+  "real_asset_publication": "NOT TESTED/NOT AUTHORIZED: no real scene assets released",
+  "note": "metadata scanning alone cannot detect baked geometry or image answers"
+}

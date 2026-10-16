@@ -1,0 +1,7 @@
+{
+  "skill_name": "internal_piper_interface_test",
+  "version": "2.0.0-candidate",
+  "entrypoint": "main.py",
+  "api_version": "ctrc-skill-v1",
+  "tool_profile": "piper-joint-v2-candidate"
+}

@@ -1,0 +1,63 @@
+[
+  {
+    "variant": "ground_diagnostic",
+    "status": "INVALID_DIAGNOSTIC_SETUP",
+    "frames": 11160,
+    "peak_speed_m_s": 440.8083801269531,
+    "peak_penetration_m": -0.1921693980693817,
+    "peak_impulse_Ns": 69.4105453491211,
+    "first_exit_substep": 494,
+    "peak_arm_velocity": 18038.84375,
+    "error": null,
+    "meaning": "Execution completed, not a physical health acceptance PASS",
+    "reason": "Default SAPIEN plane normal was X; initial overlaps. Excluded from comparisons. Correct horizontal plane tested separately."
+  },
+  {
+    "variant": "contact2mm",
+    "status": "PASS",
+    "frames": 11160,
+    "peak_speed_m_s": 1.3814841508865356,
+    "peak_penetration_m": -0.0049855709075927734,
+    "peak_impulse_Ns": 3.2746384143829346,
+    "first_exit_substep": null,
+    "peak_arm_velocity": 0.7720147371292114,
+    "error": null,
+    "meaning": "Execution completed, not a physical health acceptance PASS"
+  },
+  {
+    "variant": "solver30_4",
+    "status": "PASS",
+    "frames": 11160,
+    "peak_speed_m_s": 0.8103268146514893,
+    "peak_penetration_m": -0.0031775236129760742,
+    "peak_impulse_Ns": 1.0883735418319702,
+    "first_exit_substep": null,
+    "peak_arm_velocity": 0.7081552147865295,
+    "error": null,
+    "meaning": "Execution completed, not a physical health acceptance PASS"
+  },
+  {
+    "variant": "coacd8",
+    "status": "PASS",
+    "frames": 11160,
+    "peak_speed_m_s": 0.8367884755134583,
+    "peak_penetration_m": -0.0027462157886475325,
+    "peak_impulse_Ns": 1.5214085578918457,
+    "first_exit_substep": null,
+    "peak_arm_velocity": 0.7311002016067505,
+    "error": null,
+    "meaning": "Execution completed, not a physical health acceptance PASS"
+  },
+  {
+    "variant": "baseline",
+    "status": "PASS",
+    "frames": 11160,
+    "peak_speed_m_s": 231.02833557128906,
+    "peak_penetration_m": -0.021963149309158325,
+    "peak_impulse_Ns": 8.070377349853516,
+    "first_exit_substep": 5504,
+    "peak_arm_velocity": null,
+    "error": null,
+    "meaning": "Execution completed, not a physical health acceptance PASS"
+  }
+]

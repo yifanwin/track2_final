@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "checks": {
+    "private_read": "PASS",
+    "private_write": "PASS",
+    "proc_escape": "PASS",
+    "skill_modify": "PASS",
+    "network": "PASS",
+    "fork": "PASS",
+    "chroot_capability": "PASS",
+    "environment": "PASS",
+    "hidden_suite_read": "PASS",
+    "hidden_gt_read": "PASS",
+    "score_read": "PASS",
+    "score_tamper": "PASS",
+    "trace_tamper": "PASS",
+    "mount_escape": "PASS",
+    "namespace_change": "PASS",
+    "ptrace": "PASS",
+    "inherited_private_fd": "PASS"
+  },
+  "canary_unchanged": true,
+  "scope": "local WSL synthetic adversary; no real contestant; not a full independent security certification",
+  "architecture": "user/mount/network/PID namespaces + chroot + dropped caps + no_new_privs + seccomp + bounded stdio RPC",
+  "production_readiness": "NOT_READY: visual observation/public schema confirmation and independent security review still required"
+}

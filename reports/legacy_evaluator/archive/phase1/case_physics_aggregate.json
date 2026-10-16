@@ -1,0 +1,43 @@
+{
+  "scope": "source old collision hulls, placeholder mass/inertia, candidate single-arm base; 240 substeps legal micro-action per trial",
+  "profiles": [
+    {
+      "profile": "raw_source",
+      "trials": 292,
+      "completed": 292,
+      "failed": 0,
+      "health_review": 25,
+      "nonfinite_frames": 0.0,
+      "max_speed_m_s": 5.218946609766275
+    },
+    {
+      "profile": "support_fixed",
+      "trials": 219,
+      "completed": 219,
+      "failed": 0,
+      "health_review": 4,
+      "nonfinite_frames": 0.0,
+      "max_speed_m_s": 1.4071306666453836
+    },
+    {
+      "profile": "asset_root_centered_robot_unparked",
+      "trials": 219,
+      "completed": 216,
+      "failed": 3,
+      "health_review": 56,
+      "nonfinite_frames": 0.0,
+      "max_speed_m_s": 67.46635036466265
+    },
+    {
+      "profile": "robot_parked",
+      "trials": 219,
+      "completed": 219,
+      "failed": 0,
+      "health_review": 4,
+      "nonfinite_frames": 0.0,
+      "max_speed_m_s": 1.4068353026052371
+    }
+  ],
+  "health_alert_policy": "diagnostic review only, not automatic score or solver-divergence proof",
+  "official_parameter_approval": false
+}

@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "source": "one selected real TTG source scene with private candidate casebank",
+  "episodes": 10,
+  "paired_seeds": 5,
+  "candidate_score_100": 30.0,
+  "official_score": null,
+  "SR_first": 0.0,
+  "SR_final": 0.0,
+  "strict_success_rate_first": 0,
+  "strict_success_rate_final": 0,
+  "C1_violation_rate": 0.0,
+  "frozen_formula": "actual immutable V3.summarize",
+  "approval_required": true
+}

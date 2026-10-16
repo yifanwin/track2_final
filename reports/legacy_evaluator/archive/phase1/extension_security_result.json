@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "checks": {
+    "import_contract_extension": "PASS",
+    "import_case_backend": "PASS",
+    "import_run_selected_candidate": "PASS",
+    "import_runner": "PASS",
+    "import_sapien": "PASS",
+    "other_case_GT_r": "PASS",
+    "other_case_GT_w": "PASS",
+    "private_casebank_r": "PASS",
+    "private_casebank_w": "PASS",
+    "private_freeze_manifest_r": "PASS",
+    "private_freeze_manifest_w": "PASS",
+    "extension_evidence_r": "PASS",
+    "extension_evidence_w": "PASS",
+    "extension_score_r": "PASS",
+    "extension_score_w": "PASS",
+    "canaries_unchanged": "PASS",
+    "RPC_set_pose": "PASS",
+    "RPC_translate": "PASS",
+    "RPC_get_physics_health": "PASS",
+    "RPC_get_initialization_evidence": "PASS",
+    "RPC_score_callback": "PASS",
+    "physical_state_unchanged": "PASS"
+  },
+  "scope": "actual isolated synthetic packages, extension/casebank canaries and real Piper state; not exhaustive security certification",
+  "official_callback_sent": false
+}

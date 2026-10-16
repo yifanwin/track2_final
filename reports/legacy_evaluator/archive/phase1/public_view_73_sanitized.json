@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "audited_cases": 73,
+  "unique_public_views": 73,
+  "output_profile": "candidate only; formal schema approval pending",
+  "initial_state_or_private_path_in_view": false,
+  "full_asset_pixel_audit": "NOT TESTED"
+}

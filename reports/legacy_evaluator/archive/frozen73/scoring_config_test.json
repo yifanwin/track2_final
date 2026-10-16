@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "checks": {
+    "P1_P2_equal_weight_threshold": "PASS",
+    "trajectory_events_not_scored": "PASS",
+    "reject_P3": "PASS",
+    "reject_weight": "PASS",
+    "reject_trajectory_C1": "PASS",
+    "reject_threshold": "PASS",
+    "reject_time_ref": "PASS",
+    "three_frozen_tiers": "PASS"
+  },
+  "source": "synthetic frozen scoring fixtures",
+  "WAIT_CONFIRM": [
+    "input_interface",
+    "production_switch_permission"
+  ]
+}

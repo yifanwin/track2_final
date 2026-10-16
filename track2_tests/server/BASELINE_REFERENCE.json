@@ -1,0 +1,16 @@
+{
+  "baseline_zip_sha256": "243648d9e18baaaa79394ae5729554b7f74b8086e567ae3584bbb345a0313757",
+  "core_modules_unchanged": [
+    "adapter.py",
+    "runner.py",
+    "bridge.py",
+    "rpc.py",
+    "sandbox_bootstrap.py",
+    "skill_package.py",
+    "observations.py",
+    "physical_test.py",
+    "frozen_scorer/mesa_eval.py"
+  ],
+  "frozen_scorer_sha256": "10f89dab4354a8d79094d69d60f9f36f311b70dc02c71c590cdc4c7c249a7cd4",
+  "private_diagnostics_GT_assets_images_excluded": true
+}

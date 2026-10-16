@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "checks": {
+    "candidate_score_callback_blocked": "PASS",
+    "duplicate_stage_idempotent": "PASS",
+    "two_workers_one_local_claim": "PASS",
+    "failure_retry_and_ack": "PASS",
+    "conflicting_score_rejected": "PASS",
+    "crash_requires_authoritative_reconciliation": "PASS"
+  },
+  "network_requests": 0,
+  "production_queue_reads": 0,
+  "platform_exactly_once": "NOT TESTED: remote callback idempotency/ack contract absent",
+  "scope": "synthetic offline Worker handoff; no formal score policy change"
+}

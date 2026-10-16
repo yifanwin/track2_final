@@ -1,0 +1,15 @@
+{
+  "scope": "candidate initial scene gate, selected private cases and five seeds",
+  "cases": 73,
+  "seeds": 5,
+  "trials": 365,
+  "counts": {
+    "PASS": 365
+  },
+  "max_penetration_m": 0.008880476467311382,
+  "max_actor_speed_m_s": 0.4905000925064087,
+  "max_arm_velocity_rad_s": 0.0,
+  "per_case_detail": "judge-private only",
+  "score_changed": false,
+  "official_approval": false
+}

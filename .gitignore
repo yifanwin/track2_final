@@ -1,0 +1,90 @@
+# Track 2 评测器 —— 忽略规则
+#
+# 原则：
+#   1. **裁判私有数据一律不进 git**（casebank 是 73 例的 GT，泄漏即废题）
+#   2. 运行时缓存/临时文件不进 git（可重建，且与路径绑定）
+#   3. 冻结评分器、上游资产、判分逻辑**必须进 git**（它们是评测语义本身）
+
+# ─────────────────────────────────────────── ★ 裁判私有（最重要）
+
+# 73 例 casebank：含每例的初始/目标布局与碰撞网格 = 标准答案
+/judge_private/casebank/
+
+# 逐 case 审计记录（含私有目标指纹）
+/judge_private/candidate_manifest.private.json
+
+# 任何放在裁判私有目录下的东西都不该被提交
+/judge_private/
+
+# 保险：万一有人把 casebank 放到别处
+**/private_catalog.json
+**/frozen_case_hashes.json
+**/*.private.json
+
+# ─────────────────────────────────────────── 运行时缓存与临时文件
+
+# 沙箱运行时（`sandbox/runtime.py` 从宿主 /usr/lib 拷出来的 stdlib 副本，41 MB）
+# 它**按路径**生成，搬迁后必须重建 —— 见 `work/reports/50_step1_done.md` 的坑 2.5
+/track2_judge/sandbox/cache/
+
+# ManiSkill 资产缓存 / torch hub 缓存 / XDG 缓存
+/track2_judge/cache/
+
+# 每次 create_case_env 都会写一个 `piper_runtime_<pid>.urdf`，105 个只是残留
+/track2_judge/tmp/
+
+# 评测输出（私有证据、result_gate、diagnosis）—— 每次运行都新建
+/output/
+/outputs/
+/run/
+/closure/
+replay_v2/
+replay_v2_windows/
+
+# ─────────────────────────────────────────── Python
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 打包/安装产物
+*.egg-info/
+.eggs/
+build/
+dist/
+*.whl
+
+# 虚拟环境（PAOS 环境在 `../PhyAgentOS-core/.venv`，不该出现在这里）
+.venv/
+venv/
+env/
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# ─────────────────────────────────────────── 编辑器 / 系统
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────────────────── 不进版本控制但**必须存在**的东西
+#
+# 以下不是忽略项，只是提醒 —— 它们应当被提交：
+#
+#   track2_judge/scoring/frozen_scorer/mesa_eval.py   冻结评分器（10f89dab…），改了就是改分
+#   track2_judge/upstream/                            Piper / AGX 夹爪的 URDF + 网格
+#   track2_judge/model/piper_sim.urdf                 仿真用的机器人描述
+#   track2_judge/skills/                              内置的 trusted / security_probe 探针
+#   track2_tests/fixtures/                            合成 Skill 与合成套件
+#   track2_judge/contract/scoring_config.json         判分配置（P1/P2 权重、三档容差）

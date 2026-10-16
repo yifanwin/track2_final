@@ -1,0 +1,524 @@
+[
+  {
+    "variant": "baseline",
+    "case": "repeat0",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3043,
+          "bodies": [
+            "gripper_link1",
+            "blue_mug_on_table_000"
+          ],
+          "point_impulse_Ns": 3.0481402955171792,
+          "not_divergence_proof": true
+        },
+        "DEEP_CONTACT_ALERT": {
+          "substep": 5428,
+          "bodies": [
+            "gripper_link1",
+            "blue_mug_on_table_000"
+          ],
+          "penetration_m": 0.018029360100626945,
+          "not_divergence_proof": true
+        },
+        "DECLARED_JOINT_VELOCITY_EXCEEDED": {
+          "substep": 5447,
+          "joint_indices": [
+            3,
+            6
+          ],
+          "units": "rad/s for arm; m/s for fingers",
+          "scope": "observed physical velocity, not commanded slew or score"
+        },
+        "OUT_OF_SUPPORT_XY": {
+          "substep": 5504,
+          "object": "blue_mug_on_table_000",
+          "membership": "actor center; not forbidden-zone policy"
+        },
+        "SPEED_ALERT": {
+          "substep": 5735,
+          "object": "blue_mug_on_table_000",
+          "speed_m_s": 10.001827779880362,
+          "not_divergence_proof": true
+        },
+        "HIGH_SPEED_GRAVITY_COMPATIBLE": {
+          "substep": 5735,
+          "object": "blue_mug_on_table_000",
+          "gravity_residual_m_s2": 0.00010437011718700262
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 12,
+        "DEEP_CONTACT_ALERT": 6,
+        "DECLARED_JOINT_VELOCITY_EXCEEDED": 1,
+        "OUT_OF_SUPPORT_XY": 5657,
+        "SPEED_ALERT": 5426,
+        "HIGH_SPEED_GRAVITY_COMPATIBLE": 5426
+      },
+      "max_speed_m_s": 231.02833559385473,
+      "gravity_compatible_frames": 5699,
+      "max_accepted_gravity_residual_m_s2": 0.0010400390625004974,
+      "chain_sha256": "aa03b11d290a2d0f3d4a125a64f34d1f9b5f69194cae3d81e7bab03415063655",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 83.11925250897184,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "baseline",
+    "case": "repeat1",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3043,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 3.116542845700232,
+          "not_divergence_proof": true
+        },
+        "DEEP_CONTACT_ALERT": {
+          "substep": 5428,
+          "bodies": [
+            "gripper_link1",
+            "blue_mug_on_table_000"
+          ],
+          "penetration_m": 0.018029360100626945,
+          "not_divergence_proof": true
+        },
+        "DECLARED_JOINT_VELOCITY_EXCEEDED": {
+          "substep": 5447,
+          "joint_indices": [
+            3,
+            6
+          ],
+          "units": "rad/s for arm; m/s for fingers",
+          "scope": "observed physical velocity, not commanded slew or score"
+        },
+        "OUT_OF_SUPPORT_XY": {
+          "substep": 5504,
+          "object": "blue_mug_on_table_000",
+          "membership": "actor center; not forbidden-zone policy"
+        },
+        "SPEED_ALERT": {
+          "substep": 5735,
+          "object": "blue_mug_on_table_000",
+          "speed_m_s": 10.001827779880362,
+          "not_divergence_proof": true
+        },
+        "HIGH_SPEED_GRAVITY_COMPATIBLE": {
+          "substep": 5735,
+          "object": "blue_mug_on_table_000",
+          "gravity_residual_m_s2": 0.00010437011718700262
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 12,
+        "DEEP_CONTACT_ALERT": 6,
+        "DECLARED_JOINT_VELOCITY_EXCEEDED": 1,
+        "OUT_OF_SUPPORT_XY": 5657,
+        "SPEED_ALERT": 5426,
+        "HIGH_SPEED_GRAVITY_COMPATIBLE": 5426
+      },
+      "max_speed_m_s": 231.02833559385473,
+      "gravity_compatible_frames": 5699,
+      "max_accepted_gravity_residual_m_s2": 0.0010400390625004974,
+      "chain_sha256": "41fa2d6e3ab28ba2b850ecd2d2b25da5fa49125bb161a71f501ca3c03f2bc084",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 85.87214925698936,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "baseline",
+    "case": "offset",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3226,
+          "bodies": [
+            "gripper_link1",
+            "blue_mug_on_table_000"
+          ],
+          "point_impulse_Ns": 3.847463259244723,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 5
+      },
+      "max_speed_m_s": 0.8637260746136443,
+      "gravity_compatible_frames": 0,
+      "max_accepted_gravity_residual_m_s2": 0,
+      "chain_sha256": "257ebbaa5befea5a13d20c681727d0e43a08cf0edf39e6b6af1d5f648dcff1f0",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 99.48280422342941,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "solver30_4",
+    "case": "repeat0",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3155,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 1.004399712603413,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 24
+      },
+      "max_speed_m_s": 0.8103267820435268,
+      "gravity_compatible_frames": 0,
+      "max_accepted_gravity_residual_m_s2": 0,
+      "chain_sha256": "8778a2e95f4f026bb7ece36a16d5fd40894b4ecca8a1c19f15b95b15b49c1af1",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 94.86936874408275,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "solver30_4",
+    "case": "repeat1",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3155,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 1.004399712603413,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 24
+      },
+      "max_speed_m_s": 0.8103267820435268,
+      "gravity_compatible_frames": 0,
+      "max_accepted_gravity_residual_m_s2": 0,
+      "chain_sha256": "643453e1d395bb2d93b291ec1d9f32a533258b1399df0643992a54072c5b9c1d",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 95.59609420225024,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "solver30_4",
+    "case": "offset",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3168,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 1.0739752125182789,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 111
+      },
+      "max_speed_m_s": 0.8486963439423156,
+      "gravity_compatible_frames": 0,
+      "max_accepted_gravity_residual_m_s2": 0,
+      "chain_sha256": "402e08e71bd30ccc6b4b59be99b54352be3f450afa0979f5ea9d6ed869e9830b",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 99.9356969287619,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "contact2mm",
+    "case": "repeat0",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3156,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 1.0339465816555218,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 23
+      },
+      "max_speed_m_s": 1.3814841634228725,
+      "gravity_compatible_frames": 6,
+      "max_accepted_gravity_residual_m_s2": 4.23431396434637e-06,
+      "chain_sha256": "a649beea68786c2dc4750b995ebce2b7e9822c84c5cce3ecf1e45333c7358fd2",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 34.18784818984568,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "contact2mm",
+    "case": "repeat1",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3156,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 1.0339465816555218,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 23
+      },
+      "max_speed_m_s": 1.3814841634228725,
+      "gravity_compatible_frames": 6,
+      "max_accepted_gravity_residual_m_s2": 4.23431396434637e-06,
+      "chain_sha256": "83d74a7de99eaef180d92c5fd7a8291b0e80c267f314b028465a9714831c9608",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 33.38678009528667,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "contact2mm",
+    "case": "offset",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 3372,
+          "bodies": [
+            "gripper_link1",
+            "blue_mug_on_table_000"
+          ],
+          "point_impulse_Ns": 1.073419718510675,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 16
+      },
+      "max_speed_m_s": 1.2240336776466207,
+      "gravity_compatible_frames": 12,
+      "max_accepted_gravity_residual_m_s2": 1.007080078174738e-05,
+      "chain_sha256": "abd3edf945e406d5c83b699e67481fdc6f8455f7a2aeb2341e7fc97e0c243421",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 33.30382362892851,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "coacd8",
+    "case": "repeat0",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 2977,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 1.5214086471677044,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 2
+      },
+      "max_speed_m_s": 0.8367884373327127,
+      "gravity_compatible_frames": 0,
+      "max_accepted_gravity_residual_m_s2": 0,
+      "chain_sha256": "0eb76e3e2d36f332dd886465137f6b9606d48c58cb310329d82f8bd7328c167f",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 81.34188020695001,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "coacd8",
+    "case": "repeat1",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 2977,
+          "bodies": [
+            "gripper_link1",
+            "blue_mug_on_table_000"
+          ],
+          "point_impulse_Ns": 1.5119856036656931,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 2
+      },
+      "max_speed_m_s": 0.8367884373327127,
+      "gravity_compatible_frames": 0,
+      "max_accepted_gravity_residual_m_s2": 0,
+      "chain_sha256": "5f4d68850ecb5ceceae3d20264d125f5e1768ec4bceb0a10332d21d36d41735a",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 81.49979685200378,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  },
+  {
+    "variant": "coacd8",
+    "case": "offset",
+    "status": "PASS",
+    "health": {
+      "schema": "physics-health-diagnostic-v1",
+      "coverage": "COMPLETE",
+      "frames": 11160,
+      "expected_frames": 11160,
+      "status": "REVIEW_REQUIRED",
+      "nonfinite_frames": 0,
+      "first_flags": {
+        "CONTACT_IMPULSE_ALERT": {
+          "substep": 2951,
+          "bodies": [
+            "blue_mug_on_table_000",
+            "white_square_table_000"
+          ],
+          "point_impulse_Ns": 1.6478670198712735,
+          "not_divergence_proof": true
+        }
+      },
+      "flag_counts": {
+        "CONTACT_IMPULSE_ALERT": 156
+      },
+      "max_speed_m_s": 0.8666309885658022,
+      "gravity_compatible_frames": 0,
+      "max_accepted_gravity_residual_m_s2": 0,
+      "chain_sha256": "9663c8283daa30eb0b7e9a0c0167df0112aa0ff37c6ccd22694d5a7dd1f0e416",
+      "support_envelope_configured": true,
+      "declared_velocity_limits_checked": true,
+      "threshold_scope": "DIAGNOSTIC ONLY; no automatic score, clamp, abort, or policy change",
+      "public_skill_visibility": false
+    },
+    "wall_s": 79.92388358013704,
+    "meaning": "PASS means diagnostic replay complete and finite, not acceptance of formal parameters"
+  }
+]

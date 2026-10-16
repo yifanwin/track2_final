@@ -1,0 +1,7 @@
+{
+  "color_pixel_fraction": 0.03916666666666667,
+  "max_channel_spread": 63.0,
+  "std": 82.35987022647636,
+  "status": "PASS",
+  "reason": "original COLOR_0 restored via geometry-verified texture cache; official camera pose remains pending"
+}

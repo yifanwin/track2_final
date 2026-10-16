@@ -1,0 +1,8 @@
+# Local synthetic checks (Windows or Linux)
+numpy==2.2.6
+scipy==1.15.3
+Pillow==12.3.0
+# Actual physics requires Linux; reuse an authorized existing environment.
+# Tested: mani_skill==3.0.1, sapien==3.0.3, torch==2.14.1+cpu.
+# No network installation was performed. CPU torch build is environment-specific.
+# System: util-linux (unshare/mount), libseccomp.so.2, /usr/bin/python3 (stdlib).

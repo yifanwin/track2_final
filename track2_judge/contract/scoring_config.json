@@ -1,0 +1,99 @@
+{
+  "profile": "track2-ttg73-author-pdf-final-state-v1",
+  "source_document": "指标细化（出题人版）.pdf",
+  "source_document_sha256": "db2b9ec7b92b02cfd19130f9ea94effb3544eaf8add83137030dce8b2f18760d",
+  "case_count": 73,
+  "task_type": "pick_place",
+  "predicates": [
+    "P1",
+    "P2"
+  ],
+  "predicate_weights": [
+    1,
+    1
+  ],
+  "state_scoring": "final_state_only",
+  "initial_state": "judge_private",
+  "target_fields": "public",
+  "optional_C1": [
+    "non_target_displacement"
+  ],
+  "tiers": {
+    "loose": {
+      "environment": "sim",
+      "tier": "loose",
+      "repeats": 5,
+      "eps_pos_cm": 5,
+      "eps_rot_deg": 15,
+      "delta_max_cm": 3,
+      "completion_threshold": 0.6,
+      "time_ref_s": 90.0,
+      "violation_cap": 1.0,
+      "replan_budget": 2,
+      "non_target_displacement": true,
+      "event_constraints": [],
+      "weights": {
+        "final": 0.5,
+        "first": 0.2,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "auxiliary_mode": "final",
+      "stdev": "population",
+      "constraint_score_policy": "penalty_only"
+    },
+    "standard": {
+      "environment": "sim",
+      "tier": "standard",
+      "repeats": 5,
+      "eps_pos_cm": 3,
+      "eps_rot_deg": 10,
+      "delta_max_cm": 2,
+      "completion_threshold": 0.6,
+      "time_ref_s": 90.0,
+      "violation_cap": 1.0,
+      "replan_budget": 2,
+      "non_target_displacement": true,
+      "event_constraints": [],
+      "weights": {
+        "final": 0.5,
+        "first": 0.2,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "auxiliary_mode": "final",
+      "stdev": "population",
+      "constraint_score_policy": "penalty_only"
+    },
+    "strict": {
+      "environment": "sim",
+      "tier": "strict",
+      "repeats": 5,
+      "eps_pos_cm": 2,
+      "eps_rot_deg": 5,
+      "delta_max_cm": 1,
+      "completion_threshold": 0.6,
+      "time_ref_s": 90.0,
+      "violation_cap": 1.0,
+      "replan_budget": 2,
+      "non_target_displacement": true,
+      "event_constraints": [],
+      "weights": {
+        "final": 0.5,
+        "first": 0.2,
+        "constraints": 0.15,
+        "efficiency": 0.1,
+        "stability": 0.05
+      },
+      "auxiliary_mode": "final",
+      "stdev": "population",
+      "constraint_score_policy": "penalty_only"
+    }
+  },
+  "WAIT_CONFIRM": [
+    "input_interface",
+    "production_switch_permission"
+  ]
+}
