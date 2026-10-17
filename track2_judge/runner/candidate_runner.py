@@ -77,6 +77,11 @@ class CandidateRunner:
                             phase='skill_initialize'
                             process=PackageExecutor(package,output/'skill_work',isolated=self.isolated,trusted=self.trusted,timeout_s=self.timeout_s)
                             context={'skill_api_version':'ctrc-skill-v1','mode':mode,'environment':'sim','timeout_s':self.timeout_s,'tool_call_budget':self.max_steps}
+                            # ⚠️ `mode` 保留是**只为诊断可观测**（A4 / 2026-10-17）：
+                            #    它现在**不承诺任何行为差异** —— `first`/`final` 的
+                            #    差别只在**裁判调几次 `run()`**（1 次 vs 最多 3 次），
+                            #    与选手在一轮里怎么闭环无关。
+                            #    选手**不应**根据它改变算法（见选手指南 §5.3）。
                             process.initialize(context)
                         else:process=SkillProcess(skill,output/'skill_work',isolated=self.isolated,trusted=self.trusted)
                         calls=[]
