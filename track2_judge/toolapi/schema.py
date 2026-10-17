@@ -44,8 +44,12 @@ __all__ = [
 ]
 
 IMPLEMENTATION_ID = "track2.runtime"
-# 批准图像的声明。两处复用（`images.center` 与 `images.first_frame`）——
-# 用 Python 层的名字共享，序列化后是完全 inline 的 JSON（PAOS 不解析 `$ref`）。
+# 批准图像的声明。引用处用 Python 层的名字共享 ——
+# 序列化后是完全 inline 的 JSON（PAOS 不解析 `$ref`）。
+#
+# ⚠️ **里面没有 `seq`**（第 5 步的决定）：`seq` 是官方 gateway 推
+# `/ws/images` 时盖的（`runtime_service.py:205`），不在 `observe` 的返回里。
+# 选手判「这一帧是不是新的」靠 `sha256` 自比。
 _PNG_IMAGE = {
     "type": "object",
     "additionalProperties": False,
@@ -119,12 +123,17 @@ _OBSERVE = {
             # 不是这个字段本身 —— 所以 ToolSpec 这里对内容不做约束。
             "task_inputs": {"type": "object"},
             # 图像载体。模式 B（Q4）下**这是选手唯一的感知来源**。
+            #
+            # ⚠️ 键名从 `first_frame` 改成 `camera`（第 5 步）：模式 B 下它
+            # **每控制步都更新**，`first_frame` 这个名字会误导选手只调一次
+            # `observe` 就以为拿到了全部感知。
+            #
             # `camera_status` 是运行事实（拍到了没），不是目标答案。
             "images": {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "first_frame": _PNG_IMAGE,
+                    "camera": _PNG_IMAGE,
                     "camera_status": {"type": "string"},
                 },
             },

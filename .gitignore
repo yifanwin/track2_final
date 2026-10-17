@@ -7,13 +7,9 @@
 
 # ─────────────────────────────────────────── ★ 裁判私有（最重要）
 
-# 73 例 casebank：含每例的初始/目标布局与碰撞网格 = 标准答案
-/judge_private/casebank/
-
-# 逐 case 审计记录（含私有目标指纹）
-/judge_private/candidate_manifest.private.json
-
-# 任何放在裁判私有目录下的东西都不该被提交
+# 73 例 casebank：含每例的初始/目标布局与碰撞网格 = 标准答案。
+# 预渲染的参考图（第 5/7 步）与 oracle 执行包（第 6 步）也在它下面 ——
+# 一条规则盖全，别在下面对 `judge_private/` 再写一遍「不忽略」的反例。
 /judge_private/
 
 # 保险：万一有人把 casebank 放到别处

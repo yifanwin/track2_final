@@ -51,7 +51,27 @@ python track2_judge/cli/select_case.py \
     --case-id 001_real_world_images__real_image_1 \
     --skill-zip path/to/skill.zip \
     --output /tmp/run_001
+
+# 裁判侧 Oracle（GT 规划由**入口自己**做）
+python work/scripts/run_oracle_case.py --case-id <case_id>
 ```
+
+## 视觉资产（第 7 步）
+
+参考图与每帧 RGB 的**颜色**来自新交付包
+`<TRACK2_SCENES_ROOT>/<case_id>/scene.glb`（默认指 `zhangyexin/scenes`，
+可用环境变量覆盖）。**物理仍用 `judge_private/casebank` 的碰撞凸包** ——
+两者是同一次 build 挂到同一个 actor 上的。
+
+⚠️ **SAPIEN 3.0.3 的 `add_visual_from_file` 不吃 GLB 的颜色**
+（检测到 `COLOR_0` 就把 shape 路由到 `visual_shader/vertex_color`，
+连显式材质一起丢）。所以 `scenario/visual_asset.py` 读 `COLOR_0`，
+按**面平均色** k-means 成 5 个单色块，每块用
+`RenderShapeTriangleMesh` 手工挂上去。详见
+`wenyifan/work/reports/57_pitfalls_pvsr.md`（坑表 F12–F17）。
+
+**拿不到新资产就抛 `VisualAssetError`，不降级** —— 静默退回「按物体名
+猜颜色」会让人误以为图是新包出的。
 
 ## 已完成的两步
 

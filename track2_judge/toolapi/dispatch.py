@@ -209,8 +209,10 @@ class GatewayExecutor:
             out["task_inputs"] = raw["task_inputs"]
         if include_rgb:
             images = {}
+            # 内部原始观测的键仍是 `first_frame`（provider 的缓存名），
+            # 对选手暴露的 ToolSpec 键是 `camera`。
             if raw.get("first_frame") is not None:
-                images["first_frame"] = raw["first_frame"]
+                images["camera"] = raw["first_frame"]
             if raw.get("camera_status") is not None:
                 # 相机没配好时也要让选手看见 —— 否则他会以为图像是空的。
                 images["camera_status"] = str(raw["camera_status"])

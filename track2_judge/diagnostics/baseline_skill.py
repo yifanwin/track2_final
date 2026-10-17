@@ -89,23 +89,36 @@ def run(observation,tools):
     if STATE.get('done'):return {'status':'completed','baseline':'no extra motion after completed sequence'}
     obs=tools.observe();q=obs['robot']['joint_position'];previous=STATE.setdefault('command',list(q[:6])+[q[6]-q[7]])
     current=rt(quatrot(obs['robot']['tcp_quaternion_wxyz']),obs['robot']['tcp_position_m']);base=mm(current,inv(fk(q[:6])))
-    p=next(x for x in obs['task_inputs']['predicates'] if x['type']=='P2');goal=p['target_pose'][:3]
-    # Public-goal prior only. Frozen Case initial location is NOT supplied.
-    grip=list(goal)
-    if obs['task_inputs'].get('text_instruction','').startswith('PUBLIC_CALIBRATION_35MM'):grip[0]-=.035
+    p=next(x for x in obs['task_inputs']['predicates'] if x['type']=='P2')
+    # ⚠️ 模式 B（第 5 步）后公开输入里**没有 `target_pose` 了**。
+    #    这个诊断基准原来靠它拿目标位置；现在改成**从参考图里视觉定位**
+    #    （`reference_image` 那个通路，见下面 `DIAGNOSTIC_RGB_CAMERA=` 分支），
+    #    拿不到就明确失败 —— **不用隐藏状态兜底**。
+    goal=None
+    grip=None
     text=obs['task_inputs'].get('text_instruction','')
-    if text.startswith('DIAGNOSTIC_RGB_CAMERA=') and obs.get('first_frame'):
-        calibration=json.loads(text.split('\n',1)[0].split('=',1)[1]);w,h,ch,rows=png_pixels(obs['first_frame']);xs=[];ys=[]
+    if text.startswith('DIAGNOSTIC_RGB_CAMERA=') and (obs.get('images') or {}).get('camera'):
+        calibration=json.loads(text.split('\n',1)[0].split('=',1)[1]);w,h,ch,rows=png_pixels(obs['images']['camera']);xs=[];ys=[]
         color='blue' if 'blue' in p['object'] else 'green' if 'green' in p['object'] else 'red'
         for y,row in enumerate(rows):
             for x in range(w):
                 rgb=row[x*ch:x*ch+3];index={'blue':2,'green':1,'red':0}[color]
                 if rgb[index]>70 and all(rgb[index]>1.5*rgb[k] for k in range(3) if k!=index):xs.append(x);ys.append(y)
         if len(xs)<5:return {'status':'completed','baseline':'vision target not detected; no hidden state fallback'}
-        span=2*calibration['height_m']*math.tan(calibration['fov_rad']/2)
-        grip[0]=calibration['center_m'][0]+(statistics.median(xs)+.5-w/2)/w*span
-        grip[1]=calibration['center_m'][1]-(statistics.median(ys)+.5-h/2)/h*span
-        grip[2]+=.015
+        # 从**参考图**里定位目标（模式 B：选手也只有图像可看）
+        ref=(obs['task_inputs'] or {}).get('reference_image')
+        if ref is None:return {'status':'completed','baseline':'no reference image in public input; mode B requires one'}
+        span=2*calibration['distance_m']*math.tan(calibration['fov_rad']/2)
+        grip=[calibration['aim_m'][0]+(statistics.median(xs)+.5-w/2)/w*span,
+              calibration['aim_m'][1]+(statistics.median(ys)+.5-h/2)/h*span,
+              calibration['aim_m'][2]]
+    if grip is None or len(grip)!=3:
+        # 模式 B 下目标只能从参考图 + 相机标定推。两者缺一就**明确失败** ——
+        # 这个诊断基准不用任何隐藏状态兜底（那正是它存在的意义）。
+        STATE['done']=True
+        return {'status':'completed',
+                'baseline':'no public target source available (mode B: reference image + camera calibration required)',
+                'target_label':p['object']}
     rotation=mm([row[:3] for row in base[:3]],[[-1,0,0],[0,1,0],[0,0,-1]])
     points=[('pregrasp',[grip[0],grip[1],grip[2]+.10],.1,140),('approach',grip,.1,120),
             ('close',grip,0.,100),('lift',[grip[0],grip[1],grip[2]+.10],0.,120),
