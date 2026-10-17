@@ -8,11 +8,9 @@ import argparse, copy, json, os, re
 from pathlib import Path
 from typing import Any
 
-from track2_judge.scenario.env_factory import create_case_env
-from track2_judge.toolapi.dispatch import ManiSkillSimulatorAdapter
+from track2_judge.scenario.session import build_case_session
 from track2_judge.scenario.prototype_backend import physical_snapshot
 from track2_judge.contract.trusted_state import spatial_snapshot
-from track2_judge.observation.provider import ObservationProvider
 from track2_judge.scenario.prototype_env import SETTINGS
 from track2_judge.contract.extension import TrustedContractExtension
 from track2_judge.runner.candidate_runner import CandidateRunner
@@ -98,26 +96,13 @@ def run(case_id, skill_zip, output, *, allow_unapproved_diagnostics=False,
     # 目标参考图由 `render_reference_image` 用 `target_layout` 现渲染
     # （casebank 里没有图像资产），机位与实时帧一致。
     if task.get('scoring_profile') == PROFILE or candidate_public_goals:
-        # ⚠️ 参考图**读预渲染的**，不在这里现渲染 —— 渲染要 GPU，而回归/CPU 档
-        #    会把 `CUDA_VISIBLE_DEVICES` 清空，现渲染会直接崩。
-        #    73 张图由 `work/scripts/prerender_reference_images.py` 离线生成，
-        #    落在 `judge_private/reference_images/`（**不放进 casebank** —— 它只读）。
-        from track2_judge.observation.reference_image import load_reference_image
-        reference = load_reference_image(REFERENCE_ROOT, case_id)
-        if reference is None:
-            raise RuntimeError(
-                f"no pre-rendered reference image for {case_id}; run "
-                f"work/scripts/prerender_reference_images.py")
-        # 相机标定与参考图**同一层**（都在 `task_inputs` 下）。
-        # 它由**初始布局**算出（`fixed_camera_from_bundle(bundle, 0)`），
-        # 与目标无关 —— 见 `observation/camera_calibration.py`。
-        calibration = None
-        if diagnostic_rgb:
-            from track2_judge.observation.camera_calibration import camera_calibration
-            from track2_judge.scenario.env_factory import fixed_camera_from_bundle
-            calibration = camera_calibration(fixed_camera_from_bundle(bundle, 0))
-        public = project(task, reference_image=reference,
-                         camera_calibration=calibration)
+        # ⚠️ **唯一的公开输入构造点**（C1 / 2026-10-17）。
+        #    以前这里与 PAOS 侧各写一遍，后者硬编码两项（漏了 predicates /
+        #    constraints），于是两条路给选手的**题面不一样**。
+        #    现在统一到 `public_task_inputs()`；PAOS 侧也调它。
+        from track2_judge.observation.public_task_view import public_task_inputs
+        public = public_task_inputs(bundle, reference_root=REFERENCE_ROOT,
+                                    case_id=case_id, camera=diagnostic_rgb)
     else:
         public = {'text_instruction': 'internal legal-action diagnostic'}
 
@@ -168,7 +153,7 @@ def run(case_id, skill_zip, output, *, allow_unapproved_diagnostics=False,
         #    从**初始布局**算，与目标无关。
         #
         # ⚠️ 标定**已经在上面放进公开输入**（`task_inputs.camera_calibration`），
-        #    这里只再算一次给 `create_case_env` 建相机用 —— 两次调用是同一个
+        #    这里只再算一次给建相机用 —— 两次是同一个
         #    `fixed_camera_from_bundle(bundle, 0)`，结果必然一致。
         from track2_judge.scenario.env_factory import fixed_camera_from_bundle
         camera_specs = fixed_camera_from_bundle(bundle, 0)
@@ -189,17 +174,22 @@ def run(case_id, skill_zip, output, *, allow_unapproved_diagnostics=False,
 
     def _planning_factory(task, seed, mode):
         cp = next((p['checkpoints'] for p in task['predicates'] if p['type'] == 'P5'), [])
-        adapter = ManiSkillSimulatorAdapter(
-            lambda: create_case_env(bundle, bank, seed,
-                                    allow_unapproved_diagnostics=allow_unapproved_diagnostics,
-                                    diagnostic_camera=camera_specs),
-            snapshot=physical_snapshot, spatial_provider=spatial_snapshot,
-            metadata={n: {'pivot_m': [0, 0, 0]} for n in bundle['objects']},
-            scene_settings=SETTINGS, public_fields=adapter_public_fields,
-            observation_provider=ObservationProvider(approved_fields=adapter_public_fields,
-                                                     camera=camera,
-                                                     camera_required=diagnostic_rgb),
-            checkpoints=cp, recovery=mode == 'final', initial_validation=validate_initial_scene)
+        # ⚠️ **唯一的场景/观测构造点**（C1 / 2026-10-17）。
+        #    以前这里与 PAOS 侧各写一遍，实测漂了四个字段
+        #    （`live=` / `camera=` / `max_steps=` / `max_sim_time_s=`）。
+        #    现在统一到 `build_case_session()`；runtime 节点也调它。
+        #
+        #    `camera` 由**「正式评测 vs CPU 回归」**决定（`diagnostic_rgb`），
+        #    不由「走哪条路」决定 —— 这正是消灭漂移的关键。
+        session = build_case_session(
+            bundle, bank, seed,
+            camera=diagnostic_rgb,
+            public_fields=adapter_public_fields,
+            live=diagnostic_rgb,
+            checkpoints=cp, recovery=mode == 'final',
+            camera_spec=camera_specs,
+            case_id=case_id)
+        adapter = session.adapter
         if oracle_payload is True:
             # ★ 用**这个 adapter 的 env** 做 GT 规划。
             #   env 只在 reset 之后才存在，所以先 reset 一次（不带 GT），

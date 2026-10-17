@@ -112,6 +112,50 @@ def project(task, *, reference_image=None, camera_calibration=None):
     ).prepare(raw)
 
 
+def public_task_inputs(bundle, *, reference_root, case_id: str | None = None,
+                       camera: bool = True) -> dict:
+    """**唯一的公开输入构造点**（C1 / 2026-10-17）。
+
+    之前这件事被写了两遍：判官侧在这里 `project(...)`，PAOS 侧在
+    `node._public_task_inputs()` 里**硬编码两项**（只有 `text_instruction` +
+    `reference_image`，**没有** `predicates` / `constraints`）——
+    于是同一份 skill 在两条路上看到的**题面不一样**。
+
+    现在两侧都调它：
+
+        public = public_task_inputs(bundle, reference_root=REFERENCE_ROOT,
+                                    case_id=case_id, camera=diagnostic_rgb)
+
+    ⚠️ `camera` 决定要不要放 `camera_calibration`。它是「怎么看」（由**初始布局**
+    算出），不是答案。CPU 回归可以不放。
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from track2_judge.observation.reference_image import load_reference_image
+
+    task = bundle["contract"] if "contract" in bundle else bundle
+    case = case_id or bundle.get("source_case_id") or ""
+    if not case:
+        raise ValueError("public inputs need a case id")
+
+    reference = load_reference_image(_Path(reference_root), case)
+    if reference is None:
+        raise RuntimeError(
+            f"no pre-rendered reference image for {case}; run "
+            f"work/scripts/prerender_reference_images.py")
+
+    calibration = None
+    if camera:
+        from track2_judge.observation.camera_calibration import camera_calibration
+        from track2_judge.scenario.env_factory import fixed_camera_from_bundle
+        # 与参考图**同机位**：都用 seed 0（参考图就是按 seed 0 预渲染的）
+        calibration = camera_calibration(fixed_camera_from_bundle(bundle, 0))
+
+    return project(task, reference_image=reference,
+                   camera_calibration=calibration)
+
+
 def _reject_numbers(value, *, where: str) -> None:
     """公开输入里**不许有数值**（除了权重这种与目标无关的）。
 

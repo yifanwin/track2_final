@@ -84,3 +84,8 @@ Thumbs.db
 #   track2_judge/skills/                              内置的 trusted / security_probe 探针
 #   track2_tests/fixtures/                            合成 Skill 与合成套件
 #   track2_judge/contract/scoring_config.json         判分配置（P1/P2 权重、三档容差）
+
+# ─────────────────────────────────────────── 工具目录
+
+# Claude Code 的 worktree 与本地设置（机器相关，不进版本控制）
+/.claude/

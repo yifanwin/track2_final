@@ -1,0 +1,350 @@
+"""**常驻链路的裁判侧运行器**（C2）—— 只编排、不执行。
+
+## 它取代了什么
+
+`CandidateRunner.run()` 在**裁判进程内**造 env、装 provider、跑 skill
+（`runner/candidate_runner.py` 第 47–169 行那一段）。那是「第二套执行语义」：
+判官自己当了一次 runtime，而选手可见的东西也随之变成「判官决定」而不是
+「PAOS 决定」。实测两条路漂了**四个**字段（`live=` / `camera=` / `max_steps=` /
+`max_sim_time_s=`），并且公开输入硬编码两项、`run(observation)` 收空 dict。
+
+本模块把那段换成：
+
+```text
+PersistentFlow.reset(seed, mode)   ← 下发 episode（B1 私有通道）
+        ↓ 选手在 PAOS 沙箱里跑（正式执行链，唯一一条）
+PersistentFlow.wait_episode()      ← 等这一轮真的跑完
+PersistentFlow.snapshot()          ← judge-only 真值（B2）
+        ↓
+裁判判定（verify）+ 记录 + 评分 + 门禁
+```
+
+## 判分要的数据，一样都不少
+
+| 判分需要 | 从哪来 |
+|---|---|
+| `initial_layout` / `final_layout` | `snapshot["initial_layout"]` / `["layout"]` |
+| `initial_state` / `final_state` | `snapshot["initial_physical"]` / `["physical"]` |
+| `event_evidence` | `snapshot["event_evidence"]` |
+| `elapsed_s` | **裁判自己测的墙钟**（本模块） |
+| `plan_revisions` / `attempts` | **裁判自己数的**（`final` 最多 3 次） |
+| `status` | **裁判自己的 verify 结论**（不是选手报的 `status`） |
+
+⚠️ 最后一条最容易搞错：选手永远可以返回 `{"status": "done"}`。
+`status` 只能是 `verification['success']` 的映射。
+
+## 为什么不复用 `CandidateRunner`
+
+它把「造场景」「跑 skill」「记录」「评分」焊在一个方法里，而前三样现在都不归
+裁判。硬要复用就会把第二套语义带回来 —— 那正是这一步要删的东西。
+
+共用的是**判分与产物那一半**：`TrustedRecorder` / `TrustedContractExtension` /
+`ResultGate` 全部原样复用，**一个字节的判定语义都没改**。
+"""
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import os
+import time
+from pathlib import Path
+
+__all__ = ["ResidentRunner", "ResidentRunError"]
+
+
+class ResidentRunError(RuntimeError):
+    """编排层失败（flow 起不来 / 等 episode 超时 / 判定回调崩）——**明确失败**。"""
+
+
+def _write_json(path: Path, value) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    text = json.dumps(value, sort_keys=True, allow_nan=False)
+    path.write_text(text, encoding="utf8")
+    path.chmod(0o600)
+
+
+class ResidentRunner:
+    """一次 `case × 5 seed × 2 mode` 的评测：起**一次** flow，跑完所有 episode。"""
+
+    def __init__(self, *, case_id, casebank, reference_root, bundle_root,
+                 physics_root, python, skill_zip, output,
+                 flow=None, seeds=None, diagnostic_rgb=True, runtime_gpu="0",
+                 skill_timeout_s=20, login: Path | None = None):
+        from track2_judge.contract.extension import TrustedContractExtension
+        from track2_judge.contract.profile import load_config
+        from track2_judge.runner.persistent_flow import PersistentFlow
+
+        self.case_id = str(case_id)
+        self.casebank = Path(casebank).resolve(strict=True)
+        self.reference_root = Path(reference_root)
+        self.bundle_root = Path(bundle_root).resolve()
+        self.physics_root = Path(physics_root).resolve()
+        self.python = str(python)
+        self.skill_zip = Path(skill_zip).resolve(strict=True)
+        self.output = Path(output).resolve()
+        self.diagnostic_rgb = bool(diagnostic_rgb)
+        self.runtime_gpu = str(runtime_gpu)
+        self.skill_timeout_s = float(skill_timeout_s)
+        self.seeds = tuple(range(5) if seeds is None else seeds)
+        self.config = load_config()
+        self.engine = TrustedContractExtension()
+        self._flow_factory = flow or (lambda **kw: PersistentFlow(**kw))
+
+        bundle_path = self.casebank / "cases" / self.case_id / "case.json"
+        if not bundle_path.is_file():
+            raise ResidentRunError(f"case not found: {self.case_id}")
+        self.bundle = json.loads(bundle_path.read_text(encoding="utf8"))
+        self.task = self.bundle["contract"]
+        self.engine.validate_task(self.task)
+        self._task_config = self.engine.config_for_task(self.task, self.config)
+
+    # ── 公开入口
+
+    def run(self) -> dict:
+        """跑完全部 episode 并返回 `diagnosis`（与旧路径**同形状**）。"""
+        from track2_judge.runner.recorder import TrustedRecorder
+        from track2_judge.runner.legacy_util import canonical_json_hash
+        from track2_judge.scoring.result_gate import ResultGate, block, write_receipt
+
+        output = self.output
+        if output.exists() and any(output.iterdir()):
+            raise ResidentRunError("output must be new/empty")
+        output.mkdir(parents=True, mode=0o700, exist_ok=True)
+        if os.name == "posix":
+            if output.stat().st_uid != os.getuid():
+                raise PermissionError("judge output owner mismatch")
+            output.chmod(0o700)
+
+        suite = {"config": copy.deepcopy(self.config), "tasks": [self.task]}
+        skill_hash = hashlib.sha256(self.skill_zip.read_bytes()).hexdigest()
+        recorder = TrustedRecorder(output / "artifacts", skill_hash=skill_hash,
+                                   suite_hash=canonical_json_hash(suite),
+                                   runs_dir=output)
+        runs_log: list[dict] = []
+        health_reports: list[dict] = []
+        event_reports: list[dict] = []
+        lifecycles: list[dict] = []
+        trace: list[dict] = []
+
+        flow = self._flow_factory(
+            bundle_root=self.bundle_root, physics_root=self.physics_root,
+            python=self.python, log_path=output / "flow.log",
+            runtime_gpu=self.runtime_gpu, work_dir=self.physics_root.parent / "work",
+            player_package=self.skill_zip)
+        try:
+            flow.start()
+            for seed in self.seeds:
+                for mode in ("first", "final"):
+                    record = self._run_one(flow, recorder, seed, mode,
+                                           runs_log, health_reports,
+                                           event_reports, lifecycles, trace)
+                    print(json.dumps({k: v for k, v in record.items()
+                                      if k not in ("tool_calls", "verification")},
+                                     ensure_ascii=False), flush=True)
+        finally:
+            flow.stop()
+
+        # ── 落盘（与 `candidate_runner.py` 同一批文件名，判分侧不用改）
+        (output / "suite.json").write_text(
+            json.dumps(suite, sort_keys=True, allow_nan=False), encoding="utf8")
+        recorder.finalize(suite_path=output / "suite.json",
+                          output_path=output / "runs.json")
+        for name in ("evidence.json", "runner_manifest.json"):
+            path = output / "artifacts" / name
+            data = json.loads(path.read_text(encoding="utf8"))
+            data.update(source="resident_runner", runner_version="resident-v1",
+                        simulator_version="PAOS persistent flow")
+            for entry in data.get("runs", []):
+                entry.update(source="resident_runner", runner_version="resident-v1",
+                             simulator_version="PAOS persistent flow")
+            _write_json(path, data)
+        _write_json(output / "physics_health_diagnostic.json", health_reports)
+        _write_json(output / "physical_trace.json", trace)
+        _write_json(output / "supplemental_verification.json", [])
+        _write_json(output / "trusted_event_evidence.json", event_reports)
+        _write_json(output / "skill_lifecycle.json", lifecycles)
+
+        diagnosis = {
+            "candidate_status": "NOT_READY", "official_score": None,
+            "episodes": runs_log, "physics_health": health_reports,
+            "physics_health_policy": "independent diagnostics; no automatic scoring or clamp",
+            "source": "ACTUAL selected TTG candidate, source collision assets; PAOS persistent flow",
+            "physical_events": "PHYSX SUBSTEP EVIDENCE WHEN CONFIGURED; semantics pending official approval",
+            "isolation": "namespace_chroot (contestant side, PAOS sandbox)",
+            "exception_policy": ("Frozen V3 has no execution-status field; raw diagnostic may retain "
+                                 "auxiliary points or pose success on a timeout. Operational readiness "
+                                 "always fails on error/timeout."),
+            "execution_chain": "PAOS persistent flow (resident_runner)",
+        }
+        expected = len(self.seeds) * 2
+        complete_repeats = len(self.seeds) == int(self.config["repeats"])
+        valid = (len(runs_log) == expected
+                 and not any(r.get("status") not in ("success", "failure") for r in runs_log))
+        diagnosis["gt_access_status"] = "PASS" if valid else "FAILED"
+        # ⚠️ **少跑几个 seed 就不是评测，只是冒烟。**
+        #
+        #    `mesa_eval.validate_config` 硬要求 `repeats == 5`（sim），而
+        #    `TrustedContractExtension.evaluate` 会 `len(runs) != tasks*R*2 → ValueError`。
+        #    所以「只跑 seed 0」这种诊断**不能**也产出一个分数 —— 那会是一条
+        #    看起来合法、其实少了一半配对的成绩。这里明确标成诊断并**不评分**。
+        if valid and not complete_repeats:
+            diagnosis.update(
+                scoring_status="DIAGNOSTIC_PARTIAL_SEEDS",
+                candidate_status="DIAGNOSTIC_ONLY",
+                diagnostic_note=(f"只跑了 seed {list(self.seeds)}（repeats="
+                                 f"{self.config['repeats']}）—— 只用于冒烟，不评分"),
+                episodes_run=len(runs_log))
+        score_name = "extension_candidate_score.json"
+        replay_ok = False
+        if valid and complete_repeats:
+            try:
+                report = self.engine.evaluate(
+                    suite, {"schema_version": 1, "runs": recorder.runs}, output)
+                _write_json(output / score_name, report)
+                replay_ok = True
+                diagnosis["extension_candidate_score_100"] = report["candidate_score_100"]
+                if report.get("contract_status") == "FROZEN_AUTHOR_PDF_RULES":
+                    diagnosis.update(
+                        scoring_status="FROZEN_AUTHOR_PDF_RULES",
+                        frozen_rule_score_100=report["frozen_rule_score_100"],
+                        candidate_status=(
+                            "EVALUATION_COMPLETED"
+                            if all(r["status"] in ("success", "failure") for r in runs_log)
+                            else "EXECUTION_FAILURE"))
+            except Exception as replay_error:                   # noqa: BLE001
+                diagnosis.update(
+                    scoring_status="REFUSED: verifier/scorer replay failed",
+                    candidate_status="EXECUTION_FAILURE",
+                    error_category="VERIFIER_OR_SCORER_" + type(replay_error).__name__)
+        else:
+            diagnosis["scoring_status"] = (
+                diagnosis.get("scoring_status", "REFUSED: missing trustworthy state"))
+
+        _write_json(output / "diagnosis.json", diagnosis)
+        if replay_ok:
+            write_receipt(output, score_name, expected_runs=expected,
+                          verifier="trusted_contract_extension")
+            gate = ResultGate().check(output)
+        elif valid and not complete_repeats:
+            # 诊断跑：产物齐全但没有分数 —— 如实标成诊断，**不要**伪装成
+            # `BLOCKED`（那看起来像「评测器坏了」），也不要跳过 gate 文件。
+            gate = block(output, "DIAGNOSTIC_PARTIAL_SEEDS_NO_SCORE")
+        else:
+            gate = block(output, "VERIFIER_OR_STATE_INCOMPLETE")
+        diagnosis["result_gate"] = gate
+        return diagnosis
+
+    # ── 一个 episode
+
+    def _run_one(self, flow, recorder, seed, mode, runs_log, health_reports,
+                 event_reports, lifecycles, trace) -> dict:
+        started = time.monotonic()
+        initial_seen: dict = {}
+
+        def verdict(attempt, snapshot):
+            """**裁判的判定** —— 决定 `final` 要不要再给一次机会。
+
+            这里**只**判「成功了吗」，不改任何状态；`final` 的第 2/3 次由
+            `attempt_episode()` 在**不 reset** 的前提下追加。
+            """
+            result = self._verify(snapshot, mode)
+            initial_seen.setdefault("value", snapshot.get("initial_layout"))
+            if attempt == 1:
+                event_reports.append({"task_index": 0, "mode": mode, "seed": seed,
+                                      **self._event_block(snapshot)})
+            return bool(result["success"])
+
+        out = flow.attempt_episode(self.case_id, seed, mode,
+                                   max_attempts=3 if mode == "final" else 1,
+                                   verdict=verdict)
+        snapshot = out["snapshot"]
+        elapsed = max(time.monotonic() - started, 1e-6)
+
+        # ★ 判定用**最终那一轮的快照**（`final` 的中间轮次不留存 —— 原实现
+        #   `capture()` 也是最后一个 attempt 覆盖前者，语义一致）。
+        verification = self._verify(snapshot, mode)
+        status = "success" if verification["success"] else "failure"
+
+        initial_layout = snapshot.get("initial_layout")
+        final_layout = snapshot.get("layout")
+        if initial_layout is None or final_layout is None:
+            raise ResidentRunError(
+                "snapshot 缺少 initial_layout/layout —— runtime 侧没采到初态")
+
+        # 复算一次 `capture` + `bind` 的等价物（`extension.evaluate` 会逐字段重放比对）
+        self.engine.capture(self.task, mode, seed,
+                            snapshot.get("initial_physical"),
+                            snapshot.get("physical"), verification,
+                            self._task_config, self._event_block(snapshot),
+                            initial_layout, final_layout)
+        for attempt_entry in out["rounds"]:
+            trace.append({"task_index": 0, "seed": seed, "mode": mode,
+                          "attempt": attempt_entry["attempt"],
+                          "physical": (attempt_entry["snapshot"] or {}).get("physical")})
+
+        recorded = recorder.record(
+            task_index=0, task=self.task, mode=mode, seed=seed, environment="sim",
+            initial_layout=initial_layout, final_layout=final_layout,
+            elapsed_s=elapsed, plan_revisions=int(out["plan_revisions"]),
+            event_violations=self._event_block(snapshot).get("event_counts", {}),
+            verification=verification,
+            # ⚠️ `tool_calls` **不来自选手** —— 它是「裁判看到的调用账本」。
+            #    常驻结构下这条账在 gateway 侧，我们**如实给空列表**并标注，
+            #    而不是伪造一份。`ResultGate` 不查它（`result_gate.py` 只看
+            #    status/verification/elapsed/plan_revisions/state）。
+            tool_calls=[{"note": "tool call ledger lives in the PAOS gateway; "
+                                 "not mirrored here (resident chain)"}],
+            status=status)
+        self.engine.bind_recorded_run(self.task, mode, seed, recorded)
+
+        health_reports.append({"task_index": 0, "mode": mode, "seed": seed,
+                               "summary": snapshot.get("physics_health"),
+                               "private_evidence": None,
+                               "private_evidence_sha256": None,
+                               "note": "substep ring buffer lives in the PAOS runtime"})
+        lifecycles.append({"seed": seed, "mode": mode,
+                           "events": (out["player_summary"] or {}).get("lifecycle")})
+        runs_log.append({"seed": seed, "mode": mode, "status": status,
+                         "attempts": int(out["attempts"]),
+                         "plan_revisions": int(out["plan_revisions"]),
+                         "error_category": (out["player_summary"] or {}).get("status")
+                         if status != "success" else None,
+                         "skill_active_wall_s": elapsed,
+                         "total_wall_s": elapsed,
+                         "success_scope": "FROZEN_AUTHOR_PDF_RULES"
+                         if "scoring_profile" in self.task
+                         else "TRUSTED_DIAGNOSTIC_EXTENSION"})
+        return runs_log[-1]
+
+    # ── 判定 / 证据
+
+    def _verify(self, snapshot, mode) -> dict:
+        initial = snapshot.get("initial_layout")
+        final = snapshot.get("layout")
+        if initial is None or final is None:
+            raise ResidentRunError("snapshot 缺 initial_layout/layout")
+        try:
+            return self.engine.verify(
+                self.task, initial, final, self.config,
+                event_evidence=self._event_block(snapshot),
+                initial_state=snapshot.get("initial_physical"),
+                final_state=snapshot.get("physical"), mode=mode)
+        except Exception as exc:                                # noqa: BLE001
+            # 判定抛错 = 这一次评测不可信。**如实记成 failure 并带上原因**，
+            # 不要吞掉（吞掉的后果是「用上一次的结论」这种静默错分）。
+            raise ResidentRunError(
+                f"裁判判定失败（{type(exc).__name__}: {str(exc)[:300]}）") from exc
+
+    @staticmethod
+    def _event_block(snapshot) -> dict:
+        """事件证据的形状归一。
+
+        `event_evidence` 可能带 `error`（runtime 侧采不到）—— 归成
+        「未配置」而不是让 verify 崩在 KeyError 上。
+        """
+        evidence = snapshot.get("event_evidence")
+        if not isinstance(evidence, dict) or "error" in evidence:
+            return {"event_counts": {}, "coverage": "NOT CONFIGURED",
+                    "P5": {"status": "NOT CONFIGURED"}}
+        return evidence

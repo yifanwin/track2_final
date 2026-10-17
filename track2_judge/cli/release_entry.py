@@ -36,22 +36,30 @@ def main():
     # `NOT CONFIGURED`）。只有 **CPU 回归**（无 GPU 环境）才该关。
     p.add_argument('--no-camera', dest='camera', action='store_false', default=True,
                    help='CPU 回归用：不建相机（正式评测不要带这个参数）')
+    # ── C2：走**常驻 PAOS flow**（唯一的选手执行链）
+    #
+    # 从 2026-10-17 起默认就是它。`--legacy-in-process` 保留旧路（在裁判进程里
+    # 造 env 跑 skill）**只**为了在 PAOS 起不来时能对照排查 —— 它不是评测形态，
+    # 两条路的判定语义不同（旧路选手拿到的是裁判选定的公开输入）。
+    p.add_argument('--legacy-in-process', dest='resident',
+                   action='store_false', default=True,
+                   help='诊断用：退回裁判进程内执行（正式评测不要带这个参数）')
+    p.add_argument('--bundle-root', default=None,
+                   help='PAOS Bundle 根目录（默认取 TRACK2_BUNDLE_ROOT）')
+    p.add_argument('--seeds', default=None,
+                   help='只跑这些 seed，逗号分隔（默认 0-4）')
+    p.add_argument('--render-gpu', default=None,
+                   help='渲染/物理用哪张卡（默认 TRACK2_RENDER_GPU 或 0）')
     a = p.parse_args()
     os.umask(0o077)
     out = Path(a.output).resolve()
     if out.exists():
         raise ValueError('unique new private output required')
     try:
-        from track2_judge.cli.select_case import run
-        oracle_plan = None
-        if a.oracle_plan == 'auto':
-            oracle_plan = True                 # 入口自己趁 reset 之后规划
-        elif a.oracle_plan:
-            import json
-            from pathlib import Path as _P
-            oracle_plan = json.loads(_P(a.oracle_plan).read_text(encoding='utf8'))
-        r = run(a.case_id, a.skill_zip, out, oracle_plan=oracle_plan,
-                diagnostic_rgb=a.camera)
+        if a.resident:
+            r = _resident(a, out)
+        else:
+            r = _legacy_in_process(a, out)
         gate = r.get('result_gate', {})
         print({'status': gate.get('status', 'BLOCKED'), 'official_score': None})
         return 0 if gate.get('status') == 'PASS' else 2
@@ -61,6 +69,49 @@ def main():
         block(out, reason)
         print({'status': 'BLOCKED', 'reason': reason, 'official_score': None})
         return 2
+
+
+def _resident(a, out):
+    """走常驻 PAOS flow（正式路径）。"""
+    import os
+    from pathlib import Path as _P
+
+    from track2_judge.cli.select_case import CASEBANK, REFERENCE_ROOT
+    from track2_judge.runner.resident_runner import ResidentRunner
+
+    bundle = (a.bundle_root or os.environ.get('TRACK2_BUNDLE_ROOT')
+              or _P(__file__).resolve().parents[3] / 'track2_official_runtime')
+    physics = os.environ.get('TRACK2_PHYSICS_ROOT') or str(
+        _P(__file__).resolve().parents[2])
+    python = os.environ.get('TRACK2_PYTHON') or os.environ.get(
+        'TRACK2_REGRESS_PYTHON') or 'python3'
+    if a.oracle_plan:
+        # ⚠️ Oracle 的 GT 规划**需要裁判自己的 env**（规划就是在这个 env 上做的），
+        #    而常驻结构下裁判没有 env。这条路暂时明确失败，不静默忽略。
+        raise ValueError('ORACLE_PLAN_NOT_AVAILABLE_ON_RESIDENT_CHAIN')
+    seeds = ([int(s) for s in a.seeds.split(',') if s.strip()]
+             if a.seeds else None)
+    return ResidentRunner(
+        case_id=a.case_id, casebank=CASEBANK, reference_root=REFERENCE_ROOT,
+        bundle_root=bundle, physics_root=physics, python=python,
+        skill_zip=a.skill_zip, output=out,
+        seeds=seeds, diagnostic_rgb=a.camera,
+        runtime_gpu=a.render_gpu or os.environ.get('TRACK2_RENDER_GPU') or '0',
+    ).run()
+
+
+def _legacy_in_process(a, out):
+    """旧路：裁判进程内造 env + 跑 skill（**诊断用**，不是评测形态）。"""
+    from track2_judge.cli.select_case import run
+    oracle_plan = None
+    if a.oracle_plan == 'auto':
+        oracle_plan = True
+    elif a.oracle_plan:
+        import json
+        from pathlib import Path as _P
+        oracle_plan = json.loads(_P(a.oracle_plan).read_text(encoding='utf8'))
+    return run(a.case_id, a.skill_zip, out, oracle_plan=oracle_plan,
+               diagnostic_rgb=a.camera)
 
 
 if __name__ == '__main__':
