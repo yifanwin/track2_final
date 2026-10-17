@@ -32,6 +32,7 @@
 import json
 import math
 
+from track2_judge.observation.camera_calibration import CALIBRATION_FIELD
 from track2_judge.observation.provider import ObservationProvider
 from track2_judge.scoring.scorer_bridge import v3
 
@@ -51,12 +52,17 @@ def _instruction(obj: str) -> str:
     )
 
 
-def project(task, *, reference_image=None):
+def project(task, *, reference_image=None, camera_calibration=None):
     """把一例的私有 contract 投影成**选手可见的公开输入**。
 
     `reference_image` 是 `observation.reference_image.render_reference_image`
     的产物（`rgb_payload` 形状）。**必须给** —— 模式 B 下它是选手唯一的
     目标信息来源；不给就只剩一句自然语言指令，信息量不足以完成任务。
+
+    `camera_calibration` 是 `observation.camera_calibration.camera_calibration()`
+    的产物。它**不是答案**（由**初始布局**算出的机位），但**必须给** ——
+    没有它，选手拿到图也不知道像素对应世界的哪里，「从图里定位物体」做不了。
+    详见 `camera_calibration.py` 的模块说明。
     """
     if task.get('task_type') != 'pick_place':
         raise ValueError('public profile supports only the confirmed 73 pick/place tasks')
@@ -90,12 +96,19 @@ def project(task, *, reference_image=None):
     }
     if reference_image is not None:
         raw['reference_image'] = reference_image
+    if camera_calibration is not None:
+        # ⚠️ 标定**故意绕过 `_reject_numbers`** —— 它按定义就是数值（机位/跨度）。
+        #    它是「怎么看」，不是「答案是什么」：只用**初始布局** + 机器人基座算，
+        #    不碰 `target_layout`。`_reject_numbers` 管的是**目标**数值，
+        #    不是相机几何 —— 两者要分清，否则会把选手唯一的换算依据也扫掉。
+        raw[CALIBRATION_FIELD] = dict(camera_calibration)
 
     encoded = json.dumps(raw, allow_nan=False)
     if len(encoded) > 16384 * 8:
         raise ValueError('public task budget')
     return ObservationProvider(
-        approved_fields=('text_instruction', 'reference_image', 'predicates', 'constraints')
+        approved_fields=('text_instruction', 'reference_image', 'predicates',
+                         'constraints', CALIBRATION_FIELD)
     ).prepare(raw)
 
 

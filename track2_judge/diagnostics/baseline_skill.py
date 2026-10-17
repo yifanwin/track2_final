@@ -91,14 +91,15 @@ def run(observation,tools):
     current=rt(quatrot(obs['robot']['tcp_quaternion_wxyz']),obs['robot']['tcp_position_m']);base=mm(current,inv(fk(q[:6])))
     p=next(x for x in obs['task_inputs']['predicates'] if x['type']=='P2')
     # ⚠️ 模式 B（第 5 步）后公开输入里**没有 `target_pose` 了**。
-    #    这个诊断基准原来靠它拿目标位置；现在改成**从参考图里视觉定位**
-    #    （`reference_image` 那个通路，见下面 `DIAGNOSTIC_RGB_CAMERA=` 分支），
+    #    这个诊断基准原来靠它拿目标位置；现在改成**从参考图里视觉定位**，
+    #    标定从 `task_inputs.camera_calibration` 取（2026-10-17 起是**正式字段**，
+    #    不再是 `text_instruction` 里的 `DIAGNOSTIC_RGB_CAMERA=` 前缀），
     #    拿不到就明确失败 —— **不用隐藏状态兜底**。
     goal=None
     grip=None
-    text=obs['task_inputs'].get('text_instruction','')
-    if text.startswith('DIAGNOSTIC_RGB_CAMERA=') and (obs.get('images') or {}).get('camera'):
-        calibration=json.loads(text.split('\n',1)[0].split('=',1)[1]);w,h,ch,rows=png_pixels(obs['images']['camera']);xs=[];ys=[]
+    calibration=(obs.get('task_inputs') or {}).get('camera_calibration')
+    if calibration and (obs.get('images') or {}).get('camera'):
+        w,h,ch,rows=png_pixels(obs['images']['camera']);xs=[];ys=[]
         color='blue' if 'blue' in p['object'] else 'green' if 'green' in p['object'] else 'red'
         for y,row in enumerate(rows):
             for x in range(w):
@@ -108,7 +109,8 @@ def run(observation,tools):
         # 从**参考图**里定位目标（模式 B：选手也只有图像可看）
         ref=(obs['task_inputs'] or {}).get('reference_image')
         if ref is None:return {'status':'completed','baseline':'no reference image in public input; mode B requires one'}
-        span=2*calibration['distance_m']*math.tan(calibration['fov_rad']/2)
+        # 画面是正方形，两方向跨度相同（`span_m` 由标定直接给）
+        span=calibration['span_m'][0]
         grip=[calibration['aim_m'][0]+(statistics.median(xs)+.5-w/2)/w*span,
               calibration['aim_m'][1]+(statistics.median(ys)+.5-h/2)/h*span,
               calibration['aim_m'][2]]

@@ -80,7 +80,7 @@ def check_casebank(bank=CASEBANK):
 
 
 def run(case_id, skill_zip, output, *, allow_unapproved_diagnostics=False,
-        candidate_public_goals=False, skill_timeout_s=20, diagnostic_rgb=False,
+        candidate_public_goals=False, skill_timeout_s=20, diagnostic_rgb=True,
         casebank=None, oracle_plan=None):
     bank = Path(casebank).resolve(strict=True) if casebank else CASEBANK.resolve(strict=True)
     check_casebank(bank)
@@ -108,7 +108,16 @@ def run(case_id, skill_zip, output, *, allow_unapproved_diagnostics=False,
             raise RuntimeError(
                 f"no pre-rendered reference image for {case_id}; run "
                 f"work/scripts/prerender_reference_images.py")
-        public = project(task, reference_image=reference)
+        # 相机标定与参考图**同一层**（都在 `task_inputs` 下）。
+        # 它由**初始布局**算出（`fixed_camera_from_bundle(bundle, 0)`），
+        # 与目标无关 —— 见 `observation/camera_calibration.py`。
+        calibration = None
+        if diagnostic_rgb:
+            from track2_judge.observation.camera_calibration import camera_calibration
+            from track2_judge.scenario.env_factory import fixed_camera_from_bundle
+            calibration = camera_calibration(fixed_camera_from_bundle(bundle, 0))
+        public = project(task, reference_image=reference,
+                         camera_calibration=calibration)
     else:
         public = {'text_instruction': 'internal legal-action diagnostic'}
 
@@ -141,20 +150,28 @@ def run(case_id, skill_zip, output, *, allow_unapproved_diagnostics=False,
     camera_specs = None
     if diagnostic_rgb:
         import numpy as np
-        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+        # ⚠️ 不能写死 `'0'`。
+        #
+        #    这台机器有 8 张卡，而且**多数卡上跑着别人的作业**（实测 GPU 0 占用
+        #    45 GB / 49 GB、GPU 1/3/5 利用率 100%）。写死 0 等于把渲染挤到最满的
+        #    那张卡上；更糟的是 `prototype_env` 在 import 时会把
+        #    `CUDA_VISIBLE_DEVICES` **清空**（CPU 档约定），所以要在这里**重新设**
+        #    一次 —— 而「设成什么」必须可配。
+        #
+        #    优先级：调用方已经指定的 > `TRACK2_RENDER_GPU` > 默认 `0`。
+        #    显式指定时**不覆盖** —— 运维脚本要有最终决定权。
+        if not os.environ.get('CUDA_VISIBLE_DEVICES'):
+            os.environ['CUDA_VISIBLE_DEVICES'] = os.environ.get('TRACK2_RENDER_GPU', '0')
         # ⚠️ 机位**不再从答案里取**（原来是从 P2 的 `target_pose` 取，
         #    那是模式 A 的做法，而且模式 B 下公开输入里已经**没有**
         #    `target_pose` 了）。改成与参考图/实时帧同一套固定机位：
         #    从**初始布局**算，与目标无关。
+        #
+        # ⚠️ 标定**已经在上面放进公开输入**（`task_inputs.camera_calibration`），
+        #    这里只再算一次给 `create_case_env` 建相机用 —— 两次调用是同一个
+        #    `fixed_camera_from_bundle(bundle, 0)`，结果必然一致。
         from track2_judge.scenario.env_factory import fixed_camera_from_bundle
-        # 机位只依赖初始布局；`_fit_distance` 对 5 个 seed 的布局给出几乎相同的
-        # 结果（毫米级），所以固定用 seed 0 —— 与预渲染的参考图一致。
         camera_specs = fixed_camera_from_bundle(bundle, 0)
-        public['text_instruction'] = ('DIAGNOSTIC_RGB_CAMERA=' +
-                                      json.dumps({k: v for k, v in camera_specs.items()
-                                                  if k != 'up'},
-                                                 separators=(',', ':')) +
-                                      '\n' + public['text_instruction'])
 
         def camera(env):
             env.scene.update_render()

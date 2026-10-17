@@ -17,9 +17,15 @@ def main():
     views = []
     for path in sorted(base.glob('*/case.json')):
         task = json.loads(path.read_text(encoding='utf8'))['contract']
+        # ⚠️ 这里**不传 reference_image / camera_calibration** —— 它们由调用方
+        #    （`select_case.run()`）注入，不在 `project()` 里现造。
+        #    所以这条测试审的是**永远该有的那三项**。
         view = project(task)
         encoded = json.dumps(view, sort_keys=True, allow_nan=False)
-        assert set(view) == {'text_instruction', 'predicates', 'constraints'}
+        # 三项必在；`reference_image` / `camera_calibration` 是可选注入项。
+        assert {'text_instruction', 'predicates', 'constraints'} <= set(view)
+        assert set(view) <= {'text_instruction', 'predicates', 'constraints',
+                             'reference_image', 'camera_calibration'}
         assert len(view['predicates']) == 2 and len(view['constraints']) <= 1
         assert {x['type'] for x in view['predicates']} == {'P1', 'P2'}
         assert {x['type'] for x in view['constraints']} == {'C1'}

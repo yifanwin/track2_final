@@ -25,6 +25,17 @@ def main():
     #   `--oracle-plan <file>` = 用外部算好的 plan（兼容旧用法）
     p.add_argument('--oracle-plan', default=None,
                    help='"auto" to plan here, or a JSON file with a prebuilt plan')
+    # ── 实时 RGB（闭环策略的前提）
+    #
+    # **默认开**。比赛的题目是「参考目标图像，自主完成目标识别/任务拆解」，
+    # 而参考图只说明「最终该长什么样」—— 没有实时画面，选手无法回答
+    # 「杯子现在在哪 / 该往哪动 / 刚才抓成功了吗」，于是视觉+传统规划、VLM、
+    # VLA、visual servo 全部做不了，只剩开环动作（随机化布局下不可用）。
+    #
+    # 关掉它 = 把 `obs["images"]["camera"]` 变成不存在（`camera_status` 为
+    # `NOT CONFIGURED`）。只有 **CPU 回归**（无 GPU 环境）才该关。
+    p.add_argument('--no-camera', dest='camera', action='store_false', default=True,
+                   help='CPU 回归用：不建相机（正式评测不要带这个参数）')
     a = p.parse_args()
     os.umask(0o077)
     out = Path(a.output).resolve()
@@ -39,7 +50,8 @@ def main():
             import json
             from pathlib import Path as _P
             oracle_plan = json.loads(_P(a.oracle_plan).read_text(encoding='utf8'))
-        r = run(a.case_id, a.skill_zip, out, oracle_plan=oracle_plan)
+        r = run(a.case_id, a.skill_zip, out, oracle_plan=oracle_plan,
+                diagnostic_rgb=a.camera)
         gate = r.get('result_gate', {})
         print({'status': gate.get('status', 'BLOCKED'), 'official_score': None})
         return 0 if gate.get('status') == 'PASS' else 2
