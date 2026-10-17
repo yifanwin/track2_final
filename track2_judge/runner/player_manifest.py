@@ -1,6 +1,6 @@
 """选手包 manifest 校验（第 4 步）。
 
-## 选手契约（Q16 之后的**唯一**形态）
+## 选手契约
 
 ```json
 {
@@ -8,17 +8,28 @@
   "version": "1.0.0",
   "entrypoint": "entrypoint.py",
   "api_version": "ctrc-skill-v1",
-  "tool_profile": ["track2.env.observe", "track2.robot.joint_control"],
-  "requires_gpu": false
+  "tool_profile": ["track2.env.observe", "track2.robot.joint_control"]
 }
 ```
 
-相对旧契约只多了两件事：
+相对旧契约只多了一件事：
 
 | 字段 | 含义 | 谁看 |
 |---|---|---|
 | `tool_profile` | 这个包要用哪些 Tool（**Tool ID 列表**） | 准入校验 |
-| `requires_gpu` | 是否要 GPU（自己带模型推理用） | 沙箱档选择 |
+
+## `requires_gpu` 已删除（2026-10-17）
+
+旧契约里还有一个 `requires_gpu` 布尔，用来在两个沙箱档之间选。**现在只有一档**
+—— 所有选手包都在官方 runtime 里跑（Python 3.12.14 + 官方预装 ML 依赖 + 一张 GPU），
+所以这个字段没有意义了。
+
+它现在**明确拒绝**（不静默忽略），理由与 `tool_profile` 的旧字符串形态一样：
+静默接受会让选手以为自己选的档生效了，实际跑的是另一套环境。
+
+**取消两档的代价说清**：放弃了「不带模型的选手享受更强隔离」这条设计。
+隔离本身没有退化（独立 mount/pid/user namespace + seccomp + 只读挂载 +
+看不到宿主与裁判目录 + 网络隔离），只是**不再对选手区分强弱**。
 
 ## 为什么 `tool_profile` 是列表而不是字符串
 
@@ -37,6 +48,7 @@ from __future__ import annotations
 
 import ast
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -46,6 +58,7 @@ from track2_judge.toolapi import schema as schema_mod
 __all__ = [
     "PlayerManifestError", "PlayerManifest", "validate_player_dir",
     "validate_manifest_dict", "REQUIRED_TOOL_IDS", "ADMIN_TOOL_PREFIX",
+    "REMOVED_FIELDS",
 ]
 
 # 选手**只能**声明这三个。权威来源是 schema.py —— 不在这里抄一遍。
@@ -53,6 +66,16 @@ REQUIRED_TOOL_IDS: tuple[str, ...] = tuple(schema_mod.REQUIRED_TOOLS)
 
 # 裁判侧 Tool 的前缀。选手 manifest 里出现任何一个都直接拒。
 ADMIN_TOOL_PREFIX = "track2.admin."
+
+#: 已从契约里删掉的字段 → 给选手的提示。出现即拒，**不静默忽略** ——
+#: 静默接受会让选手以为自己的声明生效了。
+REMOVED_FIELDS: dict[str, str] = {
+    "requires_gpu": (
+        "all contestant packages now run in the same official sandbox "
+        "(Python 3.12.14, the official ML dependencies and one GPU are always "
+        "available). Delete this line — there is no replacement field."
+    ),
+}
 
 _MANIFEST_NAME = "manifest.json"
 _MANIFEST_MAX_BYTES = 64 * 1024
@@ -75,7 +98,6 @@ class PlayerManifest:
     api_version: str
     entrypoint: Path
     tool_profile: tuple[str, ...]
-    requires_gpu: bool
 
     @property
     def relative_entrypoint(self) -> str:
@@ -133,13 +155,15 @@ def _validate_tool_profile(value: object, *, where: str) -> tuple[str, ...]:
     return tuple(t for t in REQUIRED_TOOL_IDS if t in seen)
 
 
-def _validate_gpu_flag(value: object, *, where: str) -> bool:
-    if value is None:
-        return False
-    if not isinstance(value, bool):
-        raise PlayerManifestError(
-            f"{where}: requires_gpu must be true/false, got {type(value).__name__}")
-    return value
+def _reject_removed_fields(data: dict, *, where: str) -> None:
+    """已删掉的字段出现即拒 —— 不做静默忽略。
+
+    `requires_gpu` 曾经决定沙箱档。现在只有一档，再收这个字段意味着选手
+    以为自己选的档生效了。**明确失败**比「接受了但没用」好。
+    """
+    for field, hint in REMOVED_FIELDS.items():
+        if field in data:
+            raise PlayerManifestError(f"{where}: manifest.{field} was removed. {hint}")
 
 
 def _contained_entrypoint(root: Path, entry: object, *, where: str) -> Path:
@@ -200,6 +224,10 @@ def validate_manifest_dict(data: object, root: Path, *, where: str = "player") -
         raise PlayerManifestError(
             f"{where}: manifest missing fields: {', '.join(missing)}")
 
+    # 已删字段要在**其余校验之前**拒 —— 否则选手会先看到别的错误，
+    # 改完才发现 `requires_gpu` 也留不得。
+    _reject_removed_fields(data, where=where)
+
     api_version = _text(data["api_version"], "api_version")
     if api_version != SKILL_API_VERSION:
         raise PlayerManifestError(
@@ -216,7 +244,6 @@ def validate_manifest_dict(data: object, root: Path, *, where: str = "player") -
         api_version=api_version,
         entrypoint=entrypoint,
         tool_profile=_validate_tool_profile(data.get("tool_profile"), where=where),
-        requires_gpu=_validate_gpu_flag(data.get("requires_gpu"), where=where),
     )
 
 
@@ -265,8 +292,6 @@ def validate_player_dir(root: str | Path, *, where: str | None = None) -> Player
 
 def main(argv: list[str] | None = None) -> int:
     """给 `start.sh` 用的命令行入口：成功打一行摘要，失败非零退出。"""
-    import sys
-
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
         print("usage: python -m track2_judge.runner.player_manifest <player_dir>",
@@ -279,8 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"[player-manifest] OK skill={manifest.skill_name} "
           f"version={manifest.version} entrypoint={manifest.relative_entrypoint} "
-          f"tools={','.join(manifest.tool_profile)} "
-          f"gpu={'yes' if manifest.requires_gpu else 'no'}")
+          f"tools={','.join(manifest.tool_profile)}")
     return 0
 
 
