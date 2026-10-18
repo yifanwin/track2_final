@@ -33,10 +33,9 @@
       "non_target_displacement": true,
       "event_constraints": [],
       "weights": {
-        "final": 0.5,
+        "final": 0.6,
         "first": 0.2,
         "constraints": 0.15,
-        "efficiency": 0.1,
         "stability": 0.05
       },
       "auxiliary_mode": "final",
@@ -57,10 +56,9 @@
       "non_target_displacement": true,
       "event_constraints": [],
       "weights": {
-        "final": 0.5,
+        "final": 0.6,
         "first": 0.2,
         "constraints": 0.15,
-        "efficiency": 0.1,
         "stability": 0.05
       },
       "auxiliary_mode": "final",
@@ -81,10 +79,9 @@
       "non_target_displacement": true,
       "event_constraints": [],
       "weights": {
-        "final": 0.5,
+        "final": 0.6,
         "first": 0.2,
         "constraints": 0.15,
-        "efficiency": 0.1,
         "stability": 0.05
       },
       "auxiliary_mode": "final",

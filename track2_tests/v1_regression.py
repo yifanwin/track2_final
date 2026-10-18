@@ -72,8 +72,12 @@ def main(output,isolated=False):
         assert len(set(initial_hashes))==5
         assert all(r['attempts']<= (1 if r['mode']=='first' else 3) for r in result['episodes'])
         if kind in ('illegal','private','forge','oversized'):assert all(e['status']=='error' for e in result['episodes'])
-        elif kind=='timeout':assert all(e['status']=='timeout' for e in result['episodes'])
-        elif kind=='budget':assert all(e['status']=='timeout' for e in result['episodes'])
+        # 2026-10-18：'timeout' 与 'budget' 两条都源自**比赛预算**
+        #   （episode 墙钟 / 控制步预算）→ 可评分终态 `budget_timeout`。
+        #   'infrastructure_timeout'（链路故障）由 functional.py 的
+        #   action 超时用例覆盖。
+        elif kind=='timeout':assert all(e['status']=='budget_timeout' for e in result['episodes'])
+        elif kind=='budget':assert all(e['status']=='budget_timeout' for e in result['episodes'])
         elif count==3:assert all(e['status']=='success' for e in result['episodes'])
         else:assert all(e['status']=='failure' for e in result['episodes'])
         raw=v3.evaluate(suite(),{'schema_version':1,'runs':runs['runs']},output/kind)

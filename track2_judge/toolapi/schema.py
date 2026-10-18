@@ -146,9 +146,11 @@ _OBSERVE = {
 # ──────────────────────────────────────── joint_control / gripper_control（Action）
 
 # Q13：超时后必须先 cancel，再等 backend 确认真实停止。
-# Q14：超时秒数待 73 case 实测 —— 实测前的保守占位值。
-ACTION_TIMEOUT_S = 30.0
-ACTION_TIMEOUT_SOURCE = "PROVISIONAL_PENDING_MEASUREMENT"
+# Q14（2026-10-18 定）：全量 73 例实测 p50 0.097 / p99 0.675 / max 0.940 s
+#   → 取 5.0 s（≈ max 的 5.3 倍）。**客户端先到点**（< gateway 的
+#   `invoke_timeout_ms=30000`），避免两者同刻到点的竞态。
+ACTION_TIMEOUT_S = 5.0
+ACTION_TIMEOUT_SOURCE = "MEASURED_73_CASES_P99_PLUS_MARGIN"
 
 # Q9：关节控制天然串行，两个 Action 均为 1。
 ACTION_MAX_CONCURRENCY = 1

@@ -5,7 +5,8 @@ import copy, hashlib, json, time, os
 from pathlib import Path
 from track2_judge.util.common import plain
 from track2_judge.scoring.scorer_bridge import v3, FrozenVerifier
-from track2_judge.sandbox.rpc import SkillProcess, SkillTimeout, encode, SecurityNotReady
+from track2_judge.sandbox.rpc import (BudgetTimeout, SkillProcess, SkillTimeout,
+                                     encode, SecurityNotReady)
 from track2_judge.runner.recorder import TrustedRecorder
 from track2_judge.runner.legacy_util import canonical_json_hash
 from track2_judge.sandbox.package import unpack_skill,PackageExecutor
@@ -96,6 +97,9 @@ class CandidateRunner:
                             try: value=tools.dispatch(method,payload)
                             except ToolCallError as exc:
                                 # 超时归 timeout（与第 1 步的行为一致）；其余算被拒。
+                                # 2026-10-18：动作层超时是**链路故障**（动作超时且物理
+                                # 状态不明），归 `infrastructure_timeout`；它不继承
+                                # `BudgetTimeout`，所以不会被下面的 `except BudgetTimeout` 放行。
                                 if isinstance(exc,ActionTimeout):
                                     raise SkillTimeout('action execution timeout') from None
                                 raise ActionRejected('action rejected: '+str(exc)[:120]) from None
@@ -110,7 +114,8 @@ class CandidateRunner:
                             attempts+=1
                             try:
                                 remaining=self.timeout_s-compute_elapsed
-                                if remaining<=0: raise SkillTimeout('episode deadline')
+                                # 这条是**比赛预算**（episode 墙钟）—— 可评分终态。
+                                if remaining<=0: raise BudgetTimeout('episode deadline')
                                 active_start=time.monotonic()
                                 service_start=getattr(process,'tool_service_s',0.)
                                 phase='skill_run'
@@ -122,8 +127,16 @@ class CandidateRunner:
                                 final=adapter.get_layout();event_evidence=adapter.get_event_evidence(enabled)
                                 verification=verify_current(final,event_evidence)
                                 status='success' if verification['success'] else 'failure'
+                            except BudgetTimeout:
+                                # 正常预算耗尽（episode 墙钟 / 控制步预算）：
+                                # 冻结当前物理状态、照常评分 —— 不算执行异常。
+                                status='budget_timeout'
+                                error_category='BUDGET_TIMEOUT'
+                                if isinstance(process,PackageExecutor):process.abort()
+                                break
                             except SkillTimeout:
-                                status='timeout'
+                                # 动作层超时（物理状态不明）= 链路故障 —— 阻断。
+                                status='infrastructure_timeout'
                                 error_category='SKILL_TIMEOUT'
                                 if isinstance(process,PackageExecutor):process.abort()
                                 break

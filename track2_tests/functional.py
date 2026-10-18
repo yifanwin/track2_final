@@ -26,12 +26,19 @@ def main(output,isolated):
     def lifecycle(kind,count):
         result=CandidateRunner(factory(count),isolated=isolated,trusted=True,package_zip=package,timeout_s=2 if kind=='timeout' else 15).run(suite(),output/kind,{'text_instruction':kind})
         assert len(result['episodes'])==10
-        expected='success' if count==3 and kind=='move' else 'error' if kind in ('illegal','private','error') else 'timeout' if kind=='timeout' else 'failure'
+        # 2026-10-18：`kind='timeout'` 用的是 `timeout_s=2`（**比赛预算**：episode 墙钟），
+        #   不是链路故障 ⇒ 可评分终态 `budget_timeout`（见 sandbox/rpc.py 的 BudgetTimeout）。
+        #   `infrastructure_timeout`（动作超时且物理状态不明）另由 client 层的
+        #   ActionStoppedUnknown 覆盖，不在这条包里。
+        expected='success' if count==3 and kind=='move' else 'error' if kind in ('illegal','private','error') else 'budget_timeout' if kind=='timeout' else 'failure'
         assert all(e['status']==expected for e in result['episodes']),result
         events=json.loads((output/kind/'skill_lifecycle.json').read_text())
         if kind in ('move','noop','forge'):
             assert all(e['events'][0:2]==['ready','initialize'] and e['events'][-1]=='shutdown' for e in events)
-        assert result['raw_frozen_score_100']==(100. if expected=='success' else 30.)
+        # 2026-10-18：E 项取消后，全失败套件的分数不再含 0.10·E。
+        #   S = 0.60·0 + 0.20·0 + 0.15·(1−0) + 0.05·(1−0) = 0.20 → **20.0**
+        #   （改前是 0.20 + 0.10·E，而 E 恒为 1.0 → 30.0）。
+        assert result['raw_frozen_score_100']==(100. if expected=='success' else 20.)
         return {'episodes':10,'status':expected,'package_loaded':True,'lifecycle':events[0]['events'],'score_is_judge_only':True}
     for kind,count in [('move',3),('noop',0),('illegal',0),('private',0),('forge',0),('error',0),('timeout',0)]:test('package_'+kind,lambda k=kind,c=count:lifecycle(k,c))
     def zip_rejection():

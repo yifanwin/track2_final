@@ -23,7 +23,7 @@ tool_id 里的点不会产生新段，所以段数就是判别依据 —— 与 
 | Q9 | 所有对 adapter 的操作串行：一把 `_adapter_lock` + 单执行线程。`max_concurrency = 1` |
 | Q12 | 每个 Action 有执行超时 `ACTION_TIMEOUT_S` |
 | Q13 | 超时后**先 cancel，再等 backend 确认真实停止**；`execution_status` 如实反映，**绝不把 cancel accepted 当已停止** |
-| Q14 | 超时秒数待 73 case 实测，当前值标 `PROVISIONAL_PENDING_MEASUREMENT` |
+| Q14 | 超时秒数由 73 case 实测定：**5.0 s**（p99 0.675 / max 0.940 s），标 `MEASURED_73_CASES_P99_PLUS_MARGIN`（2026-10-18） |
 
 ## 为什么所有操作共用一把锁
 

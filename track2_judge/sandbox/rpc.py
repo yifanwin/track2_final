@@ -4,6 +4,22 @@ from pathlib import Path
 from track2_judge.util.common import plain
 
 class SkillTimeout(TimeoutError): pass
+
+
+class BudgetTimeout(SkillTimeout):
+    """**正常的预算耗尽** —— 与链路故障区分（2026-10-18）。
+
+    触发源全部是**比赛定义的预算**：episode 墙钟（600 s）、
+    RPC/控制步数预算。语义是「到时间了 → 停止执行 → 冻结当前物理状态 → 照常评分」，
+    所以它**不是**执行异常，`ResultGate` 应当放行。
+
+    ⚠️ 刻意与三类**基础设施故障**分开，它们仍然阻断：
+      * `ActionStoppedUnknown` —— 动作超时且**物理停没停说不清**（Q13 的 unknown）
+      * `ActionTimeout` —— 动作超时但**已确认物理已停**（围栏已释放、可判）
+      * 其余 Exception —— 丢包 / 503 / 协议错，一律 infrastructure
+    """
+
+
 class SecurityNotReady(RuntimeError): pass
 
 def encode(value): return json.dumps(plain(value),allow_nan=False,separators=(',',':'))+'\n'
@@ -93,7 +109,9 @@ class SkillProcess:
         if errors:raise RuntimeError('Skill input unavailable') from None
     def receive(self,timeout_s):
         try:line=self.q.get(timeout=max(.001,timeout_s))
-        except queue.Empty:raise SkillTimeout('skill deadline') from None
+        # 2026-10-18：调用方给的截止就是**比赛预算**（episode 墙钟 / 控制步预算），
+        #   耗尽属可评分终态 —— 归 `BudgetTimeout`（`SkillTimeout` 的子类）。
+        except queue.Empty:raise BudgetTimeout('skill deadline') from None
         if line is None:raise RuntimeError('skill process unavailable')
         try:message=decode(line)
         except (ValueError,RecursionError):raise ValueError('invalid JSON RPC') from None
@@ -107,11 +125,11 @@ class SkillProcess:
             if message=={'done':True}: return
             if set(message)!={'method','payload'}: raise ValueError('RPC envelope rejected')
             count+=1
-            if count>max_requests: raise SkillTimeout('RPC budget')
+            if count>max_requests: raise BudgetTimeout('RPC budget')
             # No exception text containing judge paths/state is returned to Skill.
             result=dispatch(message['method'],message['payload'])
             self.send({'result':result})
-            if time.monotonic()>deadline: raise SkillTimeout('skill deadline')
+            if time.monotonic()>deadline: raise BudgetTimeout('skill deadline')
     def close(self):
         if sys.platform=='linux':
             import signal

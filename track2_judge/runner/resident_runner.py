@@ -64,6 +64,27 @@ def _write_json(path: Path, value) -> None:
     path.chmod(0o600)
 
 
+def _player_terminal_status(summary) -> str:
+    """从 judge 侧的 episode 记录里取出**选手节点的终态**。
+
+    ⚠️ 形状陷阱（2026-10-18 实测踩到）：`PersistentFlow.attempt_episode` 给的
+    `player_summary` 是 `.episode_results.jsonl` 的**整行** ——
+
+        {"seq": 3, "attempt": 1, "result": {"status": "budget_timeout", ...}}
+
+    也就是选手的 `status` 在 **`result` 里面**，不在顶层。
+    写成 `summary.get("status")` 会**永远拿到 None**，于是终态分类静默失效
+    （第一次 e2e 实测：10 个 episode 全被记成 `unknown`，
+    超时/链路故障的区分根本没有生效）。
+    """
+    if not isinstance(summary, dict):
+        return "unknown"
+    inner = summary.get("result")
+    if isinstance(inner, dict) and inner.get("status"):
+        return str(inner["status"])
+    return str(summary.get("status") or "unknown")
+
+
 class ResidentRunner:
     """一次 `case × 5 seed × 2 mode` 的评测：起**一次** flow，跑完所有 episode。"""
 
@@ -199,8 +220,12 @@ class ResidentRunner:
         }
         expected = len(self.seeds) * 2
         complete_repeats = len(self.seeds) == int(self.config["repeats"])
+        # ★ 2026-10-18：**三个可评分终态** —— success / failure / budget_timeout。
+        #   `budget_timeout` 的物理终态是有效的（判据见 `_run_one`），照常评分；
+        #   `infrastructure_timeout`（链路故障）**不**在内，它会走门禁阻断。
+        SCORABLE = ("success", "failure", "budget_timeout")
         valid = (len(runs_log) == expected
-                 and not any(r.get("status") not in ("success", "failure") for r in runs_log))
+                 and not any(r.get("status") not in SCORABLE for r in runs_log))
         diagnosis["gt_access_status"] = "PASS" if valid else "FAILED"
         # ⚠️ **少跑几个 seed 就不是评测，只是冒烟。**
         #
@@ -230,7 +255,7 @@ class ResidentRunner:
                         frozen_rule_score_100=report["frozen_rule_score_100"],
                         candidate_status=(
                             "EVALUATION_COMPLETED"
-                            if all(r["status"] in ("success", "failure") for r in runs_log)
+                            if all(r["status"] in SCORABLE for r in runs_log)
                             else "EXECUTION_FAILURE"))
             except Exception as replay_error:                   # noqa: BLE001
                 diagnosis.update(
@@ -286,6 +311,22 @@ class ResidentRunner:
         verification = self._verify(snapshot, mode)
         status = "success" if verification["success"] else "failure"
 
+        # ★ 2026-10-18：选手侧终态分类（见 `sandbox/rpc.py` 的 `BudgetTimeout`）。
+        #
+        #   三种**可评分终态** —— `success` / `failure` / `budget_timeout`：
+        #     * `budget_timeout` = 正常预算耗尽（600 s 墙钟 / 控制步预算）。
+        #       语义是「到时间停止 → 冻结当前物理 → 照常按 P1/P2/C1 判分」。
+        #       它的 `s` 照样来自**物理终态**（`_verify` 已经算过），所以计分不变。
+        #     * 唯一的例外是**链路故障** `infrastructure_timeout`
+        #       （丢包 / 503 / 动作超时且物理状态不明）—— 它**不得伪装**成正常超时，
+        #       直接用自己的名字，`ResultGate` 按执行异常阻断。
+        player_status = _player_terminal_status(out["player_summary"])
+        if player_status == "budget_timeout":
+            status = "budget_timeout"
+        elif player_status in ("infrastructure_timeout", "timeout", "error",
+                               "security_not_ready"):
+            status = "infrastructure_timeout"
+
         initial_layout = snapshot.get("initial_layout")
         final_layout = snapshot.get("layout")
         if initial_layout is None or final_layout is None:
@@ -324,12 +365,14 @@ class ResidentRunner:
                                "private_evidence_sha256": None,
                                "note": "substep ring buffer lives in the PAOS runtime"})
         lifecycles.append({"seed": seed, "mode": mode,
-                           "events": (out["player_summary"] or {}).get("lifecycle")})
+                           "events": ((out["player_summary"] or {}).get("result") or {})
+                                     .get("lifecycle")})
         runs_log.append({"seed": seed, "mode": mode, "status": status,
+                         "player_status": player_status,
                          "attempts": int(out["attempts"]),
                          "plan_revisions": int(out["plan_revisions"]),
-                         "error_category": (out["player_summary"] or {}).get("status")
-                         if status != "success" else None,
+                         "error_category": player_status
+                         if status not in ("success", "failure") else None,
                          "skill_active_wall_s": elapsed,
                          "total_wall_s": elapsed,
                          "success_scope": "FROZEN_AUTHOR_PDF_RULES"

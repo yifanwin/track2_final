@@ -52,9 +52,13 @@ def main(output):
             for _ in range(100):
                 def runs(mode):return [{'s':rng.choice([0,2/3,1]),'strict_success':False,'violation_count':rng.randrange(3),'elapsed_s':rng.uniform(1,200),'plan_revisions':0 if mode=='first' else rng.randrange(3)} for i in range(5)]
                 a,b=runs('first'),runs('final');actual=v3.summarize(a,b,config)
-                first=sum(x['s'] for x in a)/5;final=sum(x['s'] for x in b)/5;V=min(1,sum(x['violation_count'] for x in b)/5/config['violation_cap']);E=sum(min(1,config['time_ref_s']/x['elapsed_s']) for x in b)/5;sd=math.sqrt(sum((x['s']-final)**2 for x in b)/5)
-                pdf=.5*final+.2*first+.15*(1-V)+.1*E+.05*(1-sd);largest=max(largest,abs(pdf-actual['S']))
-        assert largest<1e-14;return {'random_paired_summaries':300,'max_PDF_formula_difference':largest,'aggregator':'unmodified V3.summarize actually called'}
+                first=sum(x['s'] for x in a)/5;final=sum(x['s'] for x in b)/5;V=min(1,sum(x['violation_count'] for x in b)/5/config['violation_cap']);sd=math.sqrt(sum((x['s']-final)**2 for x in b)/5)
+                # 2026-10-18：组委会取消 E 项，10% 并入 SR_final（0.50→0.60）。
+                # 见 report/requirement/Track2_评分口径变更_效率项改超时.md。
+                # 注意 `elapsed_s` 仍保留在 fixtures 里 —— 它仍是 run 的必填结构字段，
+                # 只是不再进任何 component。
+                pdf=.60*final+.20*first+.15*(1-V)+.05*(1-sd);largest=max(largest,abs(pdf-actual['S']))
+        assert largest<1e-14;return {'random_paired_summaries':300,'max_PDF_formula_difference':largest,'aggregator':'unmodified V3.summarize actually called','formula_version':'2026-10-18 no-E (SR_final 0.60)'}
     test('PDF_formula_frozen_summary_300',formula)
     def p3():
         s={'spatial_objects':{'a':{'canonical_root_m':[0,0,0],'aabb_world_m':[[0,0,0],[.1,.1,.1]]},'b':{'canonical_root_m':[1,1,0],'aabb_world_m':[[0,0,-.1],[1,1,0]],'container_geometry_type':'approved_axis_aligned_container_region','container_aabb_world_m':[[-1,-1,-1],[2,2,2]]},'c':{'canonical_root_m':[-1,-1,0]}},'contacts':[{'bodies':['a','b'],'points':[{'separation_m':0,'impulse_Ns':[0,0,.1]}]}]}

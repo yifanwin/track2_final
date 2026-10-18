@@ -4,6 +4,15 @@ from numbers import Real
 import numpy as np
 from track2_judge.util.common import array,plain
 
+#: health 采样频率（Hz）。2026-10-18 定：**240 → 10**。
+#:
+#: 240 Hz（逐物理子步）的完整快照占掉真策略 episode 墙钟的 ~62 %，而这套检测器
+#: 在 73 例全量里**零告警**、且没有任何判定消费者
+#: （`physics_health_diagnostic.json` 无读者）。降到 10 Hz：
+#: 相机 ON 配置 163.0 → 64.5 ms/步 ⇒ 单 episode 124.7 s → 49.3 s。
+#: 见 `report/plan/Track2_评测加速_代码改动清单.md`。
+HEALTH_HZ = 10.0
+
 class PhysicsExecutionError(RuntimeError): pass
 
 class ManiSkillSimulatorAdapter:
@@ -31,14 +40,28 @@ class ManiSkillSimulatorAdapter:
         self.__steps=0;self.__inputs=inputs
         q=array(self.__env.agent.robot.get_qpos());self.__previous=np.r_[q[:6],q[6]-q[7]]
         self.__expected_frames=0
+        self.__health_tick=0;self.__health_frames=0;self.__expected_health_frames=0
         if self.__observation_provider is not None:self.__observation_provider.capture_initial(self.__env)
         self.__health_recorder=None;self.__command=None;self.__declared_velocity_limits=None
+        #: health 的采样节流（2026-10-18）：每 N 个物理子步采一次。
+        #: `__health_tick` 是子步计数，`__health_frames` 是**实际**采样次数，
+        #: `__expected_health_frames` 是**应有**次数（= 子步数 // N）——
+        #: 两者分开是为了让 `coverage` 仍能发现「钩子没挂上」。
+        self.__health_decimation=None;self.__health_tick=0
+        self.__health_frames=0;self.__expected_health_frames=0
         scene_config=getattr(getattr(self.__env,'sim_config',None),'scene_config',None)
         if self.__health_enabled and hasattr(self.__env,'_after_simulation_step') and scene_config is not None:
             from track2_judge.diagnostics.physics_health import TrustedPhysicsHealthRecorder
             options=copy.deepcopy(getattr(self.__env,'physics_health_diagnostic_options',{}))
             if set(options)-{'speed_alert_m_s','gravity_residual_alert_m_s2','penetration_alert_m','point_impulse_alert_Ns','support_xy_bounds','evidence_frames'}:raise ValueError('invalid private health options')
-            self.__health_recorder=TrustedPhysicsHealthRecorder(dt=1/float(self.__env.sim_config.sim_freq),gravity=scene_config.gravity,**options)
+            # ★ 2026-10-18：`dt` 必须等于**真实采样间隔**，不是仿真步长。
+            #   记录器的 `ACCELERATION_ALERT` 用 `(v - v_prev)/dt` 算加速度；
+            #   采样间隔 0.1 s 而 dt 仍填 1/240 时残差会被放大 24 倍
+            #   → **持续误报** `CONTACT_FREE_ACCELERATION_ALERT`
+            #   （合成证明见 `report/plan/Track2_评测加速_代码改动清单.md` §1.1）。
+            _sim_freq=float(self.__env.sim_config.sim_freq)
+            self.__health_decimation=max(1,int(round(_sim_freq/HEALTH_HZ)))
+            self.__health_recorder=TrustedPhysicsHealthRecorder(dt=self.__health_decimation/_sim_freq,gravity=scene_config.gravity,**options)
             try:
                 import xml.etree.ElementTree as ET
                 tree=ET.parse(self.__env.agent.urdf_path)
@@ -51,29 +74,42 @@ class ManiSkillSimulatorAdapter:
             self.__event_recorder=TrustedEventRecorder(self.__event_policy,checkpoints=self.__checkpoint_contract,recovery=self.__recovery)
         if self.__health_recorder is not None or self.__event_recorder is not None:
             self.__original_hook=self.__env._after_simulation_step
+            # ★ 2026-10-18：两条分支**各走各的节流**，不再共用一次快照构造。
+            #
+            #   * 事件链的 coverage 判据是 `frames == expected_frames == 子步数`
+            #     （`scenario/prototype_env_v2.py:87`），**必须**保持每子步；
+            #   * 健康链是纯诊断，降到 10 Hz 即可。
+            #
+            #   共用一个 `frames` 会把两者绑死 —— 改一个坏另一个。
             def after_step():
                 self.__original_hook()
-                # Health needs dynamics/contact data only. Frozen73 has no
-                # trajectory predicates; avoid rebuilding all geometry AABBs
-                # twelve times per control step for a diagnostic observer.
-                if self.__event_recorder is None:
-                    if self.__snapshot is None:
-                        from track2_judge.scenario.prototype_backend import physical_snapshot
-                        raw=physical_snapshot(self.__env)
-                    else: raw=self.__snapshot(self.__env)
-                else: raw=self.__read_physical_state()
-                raw['trusted_physics_substep']=True
-                if self.__health_recorder is not None:
-                    health_state=raw.copy();health_state['judge_control']={}
-                    robot=self.__env.agent.robot
-                    if hasattr(robot,'get_drive_targets'):health_state['judge_control']['drive_targets']=array(robot.get_drive_targets())
-                    if hasattr(robot,'get_qf'):health_state['judge_control']['qf']=array(robot.get_qf())
-                    if self.__declared_velocity_limits is not None:health_state['judge_control']['declared_velocity_limits']=self.__declared_velocity_limits
-                    self.__health_recorder.sample(health_state,command=self.__command)
+                # ── 事件分支：每子步，语义不变
                 if self.__event_recorder is not None:
+                    raw=self.__read_physical_state()
+                    raw['trusted_physics_substep']=True
                     import json
                     state=json.loads(json.dumps(plain(raw),allow_nan=False))
                     self.__event_recorder.sample(state)
+                    return
+                if self.__health_recorder is None:
+                    return
+                # ── 健康分支：每 `__health_decimation` 个子步采一次（10 Hz）。
+                #    跳过时**连快照都不算** —— 省的就是这一步。
+                self.__health_tick+=1
+                if self.__health_tick % self.__health_decimation:
+                    return
+                if self.__snapshot is None:
+                    from track2_judge.scenario.prototype_backend import physical_snapshot
+                    raw=physical_snapshot(self.__env)
+                else: raw=self.__snapshot(self.__env)
+                raw['trusted_physics_substep']=True
+                self.__health_frames+=1
+                health_state=raw.copy();health_state['judge_control']={}
+                robot=self.__env.agent.robot
+                if hasattr(robot,'get_drive_targets'):health_state['judge_control']['drive_targets']=array(robot.get_drive_targets())
+                if hasattr(robot,'get_qf'):health_state['judge_control']['qf']=array(robot.get_qf())
+                if self.__declared_velocity_limits is not None:health_state['judge_control']['declared_velocity_limits']=self.__declared_velocity_limits
+                self.__health_recorder.sample(health_state,command=self.__command)
             self.__env._after_simulation_step=after_step
         return self.observe()
     def observe(self):
@@ -100,6 +136,11 @@ class ManiSkillSimulatorAdapter:
         if self.__steps>=self.__max_steps or (self.__steps+1)*dt>self.__max_time+1e-9:raise RuntimeError('control budget exhausted')
         expected=int(getattr(self.__env,'_sim_steps_per_control',0))
         self.__expected_frames+=expected
+        # health 的应有采样数按**同一个节流**算（2026-10-18）。
+        # ⚠️ **不要**把 expected 直接填成实际采样数 —— 那会让 `coverage` 退化成
+        #    恒真，丢掉「钩子还在不在」这条信息。
+        if self.__health_decimation:
+            self.__expected_health_frames=self.__expected_frames//self.__health_decimation
         self.__command={'joint_position':q.tolist(),'gripper_opening_m':g}
         try:
             self.__env.step(np.r_[q,g/2,-g/2].astype(np.float32))
@@ -122,7 +163,7 @@ class ManiSkillSimulatorAdapter:
     def get_initialization_evidence(self):return copy.deepcopy(self.__initial_evidence)
     def get_physics_health(self):
         if self.__health_recorder is None:return {'status':'NOT CONFIGURED','coverage':'NOT AVAILABLE','threshold_scope':'no synthetic health claimed'}
-        return self.__health_recorder.report(self.__expected_frames)
+        return self.__health_recorder.report(self.__expected_health_frames)
     def get_physics_health_private_evidence(self):
         return self.__health_recorder.private_evidence() if self.__health_recorder is not None else {}
     def get_event_evidence(self,enabled):

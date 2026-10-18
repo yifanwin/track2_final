@@ -17,7 +17,10 @@ BASELINE = {"completion_threshold": .6, "time_ref_s": 90.0, "violation_cap": 1.0
 REPEATS = {"sim": 5, "real": 3}
 REPLAN_BUDGET = 2
 TIERS = {"loose": (5, 5, 15, 3), "standard": (3, 4, 10, 2), "strict": (2, 3, 5, 1)}
-WEIGHTS = {"final": .50, "first": .20, "constraints": .15, "efficiency": .10, "stability": .05}
+# 2026-10-18 组委会口径变更：取消「执行效率 E」项，其 10% 权重并入 SR_final
+#   （0.50 → 0.60）。时间不再参与任何计分，只作资源/异常保护（600 s run() 墙钟）。
+#   见 report/requirement/Track2_评分口径变更_效率项改超时.md §1.2（读法 A）。
+WEIGHTS = {"final": .60, "first": .20, "constraints": .15, "stability": .05}
 EVENTS = {"collision", "forbidden_zone"}
 
 
@@ -379,12 +382,13 @@ def summarize(first, final, config):
     sr_first = statistics.mean(r["s"] for r in first)
     sr_final = statistics.mean(r["s"] for r in final)
     violation = min(1.0, statistics.mean(r["violation_count"] for r in final) / config["violation_cap"])
-    efficiency = statistics.mean(min(1.0, config["time_ref_s"] / r["elapsed_s"]) for r in final)
+    # 2026-10-18：E 项取消。`elapsed_s` **仍是** run 的必填结构字段（诊断用），
+    # 但不再进任何 component —— 上面那条 `elapsed_s > 0` 的校验保留。
     sigma = statistics.pstdev(r["s"] for r in final)
     components = {"final": WEIGHTS["final"] * sr_final, "first": WEIGHTS["first"] * sr_first,
                   "constraints": WEIGHTS["constraints"] * (1-violation),
-                  "efficiency": WEIGHTS["efficiency"] * efficiency, "stability": WEIGHTS["stability"] * (1-sigma)}
-    return {"SR_first": sr_first, "SR_final": sr_final, "V": violation, "E": efficiency, "sigma": sigma,
+                  "stability": WEIGHTS["stability"] * (1-sigma)}
+    return {"SR_first": sr_first, "SR_final": sr_final, "V": violation, "sigma": sigma,
             "N_rev": statistics.mean(r["plan_revisions"] for r in final),
             "strict_success_rate_first": statistics.mean(int(r["strict_success"]) for r in first),
             "strict_success_rate_final": statistics.mean(int(r["strict_success"]) for r in final),

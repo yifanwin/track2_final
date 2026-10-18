@@ -48,13 +48,17 @@ def real_hook():
     from track2_judge.scenario.prototype_env_v2 import make_env
     from track2_judge.scenario.prototype_backend import physical_snapshot
     from track2_judge.toolapi.dispatch import ManiSkillSimulatorAdapter
-    a=ManiSkillSimulatorAdapter(make_env,snapshot=physical_snapshot,max_steps=2)
-    b=ManiSkillSimulatorAdapter(make_env,snapshot=physical_snapshot,max_steps=2,physics_health=False)
+    # 2026-10-18：健康采样降到 10 Hz（每 24 子步 = 2 个控制步）。原 max_steps=2
+    #   只有 24 子步、恰好 1 次采样 —— 会让下面的 frames 断言退化成「只验 1 个样本」。
+    #   提到 5 步（60 子步 → 2 次采样）才验得到节流本身。
+    a=ManiSkillSimulatorAdapter(make_env,snapshot=physical_snapshot,max_steps=5)
+    b=ManiSkillSimulatorAdapter(make_env,snapshot=physical_snapshot,max_steps=5,physics_health=False)
     try:
         oa=a.reset(seed=0);ob=b.reset(seed=0);assert oa==ob
         assert not any('health' in k.lower() for k in oa)
         q=oa['robot']['joint_position'];packet={'joint_position':q[:6],'gripper_opening_m':q[6]-q[7]}
-        a.step(packet);b.step(packet);a.step(packet);b.step(packet)
+        for _ in range(5):
+            a.step(packet);b.step(packet)
         sa=a.get_final_state();sb=b.get_final_state();differences=[]
         for key in ('qpos','qvel','tcp_p_m','tcp_q_wxyz'):
             differences.append(float(np.max(np.abs(np.asarray(sa[key])-np.asarray(sb[key])))))
@@ -63,12 +67,13 @@ def real_hook():
             for key in ('actor_p_m','q_wxyz','linear_velocity_m_s','angular_velocity_rad_s'):
                 differences.append(float(np.max(np.abs(np.asarray(sa['objects'][name][key])-np.asarray(sb['objects'][name][key])))))
         assert max(differences)<1e-7,('health observation altered PhysX state',max(differences))
-        h=a.get_physics_health();assert h['coverage']=='COMPLETE' and h['frames']==24 and h['declared_velocity_limits_checked']
+        # 10 Hz：60 子步 → 2 次采样。改的是**密度断言**，不是判定断言。
+        h=a.get_physics_health();assert h['coverage']=='COMPLETE' and h['frames']==2 and h['declared_velocity_limits_checked']
         for method in ('get_physics_health','get_physics_health_private_evidence'):
             try:a.dispatch_public(method,{})
             except ValueError:pass
             else:raise AssertionError('judge health exposed through Skill API')
-        return {'actual_physx_substeps':24,'physical_state_max_abs_difference':max(differences),'health_RPC':'rejected'}
+        return {'actual_physx_substeps':60,'physical_state_max_abs_difference':max(differences),'health_RPC':'rejected'}
     finally:a.close();b.close()
 test('actual_PhysX_observer_noninterference_privacy',real_hook)
 (OUT/'health_tests.json').write_text(json.dumps({'tests':results,'scope':'synthetic detector contracts plus real hook test; no new score policy'},indent=2))

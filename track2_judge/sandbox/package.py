@@ -3,7 +3,7 @@ import hashlib, os, shutil, stat, time, zipfile,json
 from pathlib import Path, PurePosixPath
 from track2_judge.runner.skill_manifest import SkillPackage
 from track2_judge.runner.version import SKILL_API_VERSION
-from track2_judge.sandbox.rpc import SkillProcess, SkillTimeout
+from track2_judge.sandbox.rpc import BudgetTimeout, SkillProcess, SkillTimeout
 
 def unpack_skill(source,destination):
     source=Path(source).resolve();destination=Path(destination).resolve()
@@ -78,11 +78,11 @@ class PackageExecutor:
         self.process.send({'type':'run','observation':observation});deadline=time.monotonic()+timeout_s;count=0;hard_deadline=time.monotonic()+max(360,timeout_s)
         while True:
             remaining=min(deadline,hard_deadline)-time.monotonic()
-            if remaining<=0:raise SkillTimeout('package deadline')
+            if remaining<=0:raise BudgetTimeout('package deadline')
             msg=self.process.receive(remaining)
             if msg.get('type')=='tool_call' and set(msg)=={'type','tool','arguments'}:
                 count+=1
-                if count>max_requests:raise SkillTimeout('package RPC budget')
+                if count>max_requests:raise BudgetTimeout('package RPC budget')
                 if type(msg['tool']) is not str or type(msg['arguments']) is not dict:raise ValueError('malformed package tool')
                 name=msg['tool'];payload=msg['arguments']
                 # Same ToolClient lifecycle; legacy object teleport calls stay forbidden.

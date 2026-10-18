@@ -13,6 +13,20 @@ from pathlib import Path
 
 SCHEMA='track2-result-gate-v1'
 
+#: **可评分的执行终态**（2026-10-18 组委会口径）。
+#
+#   * `success` / `failure` —— 原有两类，判定来自物理终态。
+#   * `budget_timeout`     —— **正常预算耗尽**（600 s 单次 run() 墙钟 / 控制步预算）。
+#     语义是「到时间 → 停止执行 → 冻结当前物理状态 → 照常按 P1/P2/C1 判分」。
+#     它的判定输入同样是物理终态，所以与上面两类一样可评分。
+#
+#   ⚠️ **不要写成 `status == "timeout" → 一律放行`。** 链路故障必须仍然阻断：
+#     * `infrastructure_timeout` —— 丢包 / 503 / 动作超时且物理状态不明
+#       （见 `sandbox/rpc.py` 的 `BudgetTimeout` 与 `toolapi/client.py` 的
+#       `ActionStoppedUnknown`）。它只是**碰巧也是超时**，但与比赛预算无关。
+#   见 report/requirement/Track2_评分口径变更_效率项改超时.md §1.3。
+SCORABLE_TERMINAL_STATUS = frozenset({'success', 'failure', 'budget_timeout'})
+
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def canonical(value): return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
 def atomic_json(path, value):
@@ -63,7 +77,9 @@ class ResultGate:
             expected=len(suite['tasks'])*suite['config']['repeats']*2
             if receipt.get('schema')!='track2-verification-receipt-v1' or receipt.get('verified') is not True or receipt.get('expected_runs')!=expected or receipt.get('verifier') not in ('trusted_contract_extension','frozen_v3'): reject('VERIFIER_FAILED')
             if len(runs)!=expected or record_manifest.get('run_count')!=expected or len(evidence.get('runs',[]))!=expected: reject('RECORDER_INCOMPLETE')
-            if len(diagnosis.get('episodes',[]))!=expected or any(e.get('status') not in ('success','failure') for e in diagnosis.get('episodes',[])): reject('EXECUTION_EXCEPTION')
+            # 2026-10-18：三态可评分 —— `SCORABLE_TERMINAL_STATUS`。
+            # `budget_timeout` 放行；`infrastructure_timeout` 落进 EXECUTION_EXCEPTION。
+            if len(diagnosis.get('episodes',[]))!=expected or any(e.get('status') not in SCORABLE_TERMINAL_STATUS for e in diagnosis.get('episodes',[])): reject('EXECUTION_EXCEPTION')
             if diagnosis.get('scoring_status') not in ('FROZEN_AUTHOR_PDF_RULES',None) or diagnosis.get('candidate_status') in ('EXECUTION_FAILURE',): reject('EXECUTION_EXCEPTION')
             ledger=receipt.get('artifact_sha256',{})
             for rel in required[:-1]:
@@ -78,7 +94,11 @@ class ResultGate:
                 key=(run['task_id'],run['mode'],run['seed'])
                 if key in seen or run['mode'] not in ('first','final') or run['task_id'] not in tasks: reject('RUN_IDENTITY_INVALID')
                 seen.add(key);ev=by_id.get(run['run_id'],{});verification=ev.get('verification',{})
-                if ev.get('status') not in ('success','failure') or ev.get('error'): reject('EXECUTION_EXCEPTION')
+                # 同上：三条可评分终态（含 `budget_timeout`）。⚠️ 这一条查的是
+                # **运行记录里的 status**（`recorder` 落盘的那份），不是选手自报的。
+                if ev.get('status') not in SCORABLE_TERMINAL_STATUS or ev.get('error'): reject('EXECUTION_EXCEPTION')
+                # 谓词判定仍然只有 success/failure —— `budget_timeout` 只是
+                # 「执行怎么结束的」，判定本身照常二值。
                 if verification.get('status') not in ('success','failure') or not isinstance(verification.get('predicates'),list) or not verification['predicates'] or any(p.get('status') not in ('success','failure') for p in verification['predicates']): reject('VERIFIER_FAILED')
                 if type(run.get('elapsed_s')) not in (int,float) or not math.isfinite(run['elapsed_s']) or run['elapsed_s']<=0: reject('TIMING_INVALID')
                 if type(run.get('plan_revisions')) is not int or not 0<=run['plan_revisions']<=(0 if run['mode']=='first' else suite['config']['replan_budget']): reject('REPLAN_INVALID')
