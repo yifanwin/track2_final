@@ -16,15 +16,18 @@ def main():
     p.add_argument('--case-id', required=True)
     p.add_argument('--skill-zip', required=True)
     p.add_argument('--output', required=True)
-    # 裁判侧 Oracle 的 GT 通路（第 6 步）。**普通评测不带这个参数** ——
+    # 裁判侧 Oracle 的 GT 通路（第 6 步 / G2）。**普通评测不带这个参数** ——
     # 带它等于让那次评测的 skill 拿到 GT 规划结果。
     #
-    # 三种取值：
+    # 两种取值：
     #   （不传）        = 普通评测
-    #   `--oracle-plan auto`   = **在本入口里现做 GT 规划**（推荐）
-    #   `--oracle-plan <file>` = 用外部算好的 plan（兼容旧用法）
+    #   `--oracle-plan auto`   = **由 runtime 节点在它自己的 env 上现做 GT 规划**
+    #                            （常驻链下唯一可行的一种，G2 已闭）
+    #
+    # ⚠️ 从 2026-10-17 起**不接受 plan 文件**：那种形态要求「裁判能自己算规划」，
+    #    而常驻结构下 env 在 runtime 节点里 —— 裁判算不了。传文件会明确报错。
     p.add_argument('--oracle-plan', default=None,
-                   help='"auto" to plan here, or a JSON file with a prebuilt plan')
+                   help='"auto" 由 runtime 节点现做 GT 规划；plan 文件在常驻链下不被支持')
     # ── 实时 RGB（闭环策略的前提）
     #
     # **默认开**。比赛的题目是「参考目标图像，自主完成目标识别/任务拆解」，
@@ -32,10 +35,17 @@ def main():
     # 「杯子现在在哪 / 该往哪动 / 刚才抓成功了吗」，于是视觉+传统规划、VLM、
     # VLA、visual servo 全部做不了，只剩开环动作（随机化布局下不可用）。
     #
-    # 关掉它 = 把 `obs["images"]["camera"]` 变成不存在（`camera_status` 为
-    # `NOT CONFIGURED`）。只有 **CPU 回归**（无 GPU 环境）才该关。
+    # ⚠️ 关掉它 = 把这条链路降级成「没有视觉」（2026-10-17 起真的会生效）：
+    #     * `images.camera` 不存在（`camera_status` 为 `NOT CONFIGURED`）
+    #     * `task_inputs.camera_calibration` 也**没了** —— 选手失去「像素 → 世界」
+    #       的唯一依据（选手指南 §2.5b 的公式失效）
+    #     * `task_inputs.reference_image` **仍在**（它来自预渲染文件，不依赖相机）
+    #
+    #   所以它的用途只有两个：**CPU 回归**（无 GPU 环境）、以及定位
+    #   「是不是渲染把链路弄挂的」。**正式评测永远不要带这个参数。**
     p.add_argument('--no-camera', dest='camera', action='store_false', default=True,
-                   help='CPU 回归用：不建相机（正式评测不要带这个参数）')
+                   help='关相机（CPU 回归/排查用）：images.camera 与 '
+                        'task_inputs.camera_calibration 都会消失。正式评测不要带')
     # ── C2：走**常驻 PAOS flow**（唯一的选手执行链）
     #
     # 从 2026-10-17 起默认就是它。`--legacy-in-process` 保留旧路（在裁判进程里
@@ -85,10 +95,21 @@ def _resident(a, out):
         _P(__file__).resolve().parents[2])
     python = os.environ.get('TRACK2_PYTHON') or os.environ.get(
         'TRACK2_REGRESS_PYTHON') or 'python3'
-    if a.oracle_plan:
-        # ⚠️ Oracle 的 GT 规划**需要裁判自己的 env**（规划就是在这个 env 上做的），
-        #    而常驻结构下裁判没有 env。这条路暂时明确失败，不静默忽略。
-        raise ValueError('ORACLE_PLAN_NOT_AVAILABLE_ON_RESIDENT_CHAIN')
+    # ── Oracle 的 GT 规划（G2 已闭）
+    #
+    # 规划**在 runtime 节点上做**（那里才有 env）—— 常驻结构下裁判进程没有 env，
+    # 所以 `--oracle-plan auto` 的语义是「让 runtime 用**它自己的 env** 现做规划」，
+    # 由 `PersistentFlow(oracle_planning=True)` 渲染进 `runtime.yaml` 打开。
+    #
+    # `--oracle-plan <file>`（外部算好的 plan）在这条链上**不适用** ——
+    # 它要求「裁判能自己算」，而那正是常驻链没有的东西。明确失败，不静默忽略。
+    oracle_auto = False
+    if a.oracle_plan == 'auto':
+        oracle_auto = True
+    elif a.oracle_plan:
+        raise ValueError(
+            'ORACLE_PLAN_FILE_NOT_SUPPORTED_ON_RESIDENT_CHAIN: '
+            'use --oracle-plan auto（规划由 runtime 节点做），或 --legacy-in-process')
     seeds = ([int(s) for s in a.seeds.split(',') if s.strip()]
              if a.seeds else None)
     return ResidentRunner(
@@ -96,6 +117,7 @@ def _resident(a, out):
         bundle_root=bundle, physics_root=physics, python=python,
         skill_zip=a.skill_zip, output=out,
         seeds=seeds, diagnostic_rgb=a.camera,
+        oracle_planning=oracle_auto,
         runtime_gpu=a.render_gpu or os.environ.get('TRACK2_RENDER_GPU') or '0',
     ).run()
 

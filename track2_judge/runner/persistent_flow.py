@@ -64,13 +64,32 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def _set_yaml_scalar(text: str, key: str, value: str, *,
+                     add_if_missing: bool = False) -> str:
+    """把顶层标量 `key: ...` 替换成 `key: value`（逐次渲染 `runtime.yaml` 用）。
+
+    只认**行首无缩进**的那一行 —— 模板里的键都在顶层，缩进的同名字段
+    （如果有）不该被碰。`add_if_missing` 时不慎重复追加也会被 `re.M` 的首个匹配挡住。
+    """
+    import re
+    pattern = rf"^{re.escape(key)}:[ \t]*.*$"
+    if re.search(pattern, text, flags=re.M):
+        return re.sub(pattern, f"{key}: {value}", text, count=1, flags=re.M)
+    if not add_if_missing:
+        raise FlowError(
+            f"`runtime.example.yaml` 里没有 `{key}:` —— 模板与 PersistentFlow 不同步")
+    if not text.endswith("\n"):
+        text += "\n"
+    return text + f"{key}: {value}\n"
+
+
 class PersistentFlow:
     """一个常驻 dora flow 的生命周期 + 两个私有端点。"""
 
     def __init__(self, *, bundle_root, physics_root, python, log_path,
                  gateway_port=19110, control_port=None, runtime_gpu="0",
                  work_dir=None, env=None, token=None, name=None,
-                 player_package=None):
+                 player_package=None, camera=True, oracle_planning=False):
         self.bundle_root = Path(bundle_root).resolve()
         self.physics_root = Path(physics_root).resolve()
         self.python = str(python)
@@ -78,6 +97,12 @@ class PersistentFlow:
         self.gateway_port = int(gateway_port)
         self.control_port = int(control_port or free_port())
         self.runtime_gpu = str(runtime_gpu)
+        #: 要不要建相机（G3）。**渲染进 `runtime.yaml` 的 `camera_required`** ——
+        #: 不能走环境变量（`dora start --detach` 下节点由长命的 dora daemon spawn，
+        #: daemon 环境里 0 个 `TRACK2*`，会**静默地**不生效）。见 `start()`。
+        self.camera = bool(camera)
+        #: 要不要在 runtime 侧做 GT 规划（G2，裁判私有通道）。
+        self.oracle_planning = bool(oracle_planning)
         self.work_dir = Path(work_dir) if work_dir else self.log_path.parent
         self.token = token
         self.name = name or f"track2-resident-{os.getpid()}-{self.control_port}"
@@ -143,21 +168,28 @@ class PersistentFlow:
         profile = self.bundle_root / "profiles" / "sim"
         example = profile / "runtime.example.yaml"
         if example.is_file():
-            # ★ 控制口端口**写进节点自己的配置**，不靠环境变量。
+            # ★ **node 侧的两项开关都渲染进 `runtime.yaml`**，不靠环境变量。
             #
+            #   两件事都要走文件，理由是同一条：
             #   `dora start --detach` 之后节点由**长命的 dora daemon** spawn，
             #   而 daemon 环境里没有评测时设的变量（实测 `/proc/<daemon>/environ`
-            #   里 0 个 `TRACK2*`）—— 走环境变量会**静默地**不开控制口，
-            #   表现是「gateway 起来了但 /health 永远连不上」。
+            #   里 0 个 `TRACK2*`）—— 走环境变量会**静默地**不生效：
+            #     * `judge_control_port` 不开控制口 → gateway 起来了但 /health 连不上
+            #     * `camera_required` 不生效 → 假开关（这正是 G3 的形态，2026-10-17 修）
+            #
+            #   `runtime.yaml` 由本方法逐次渲染，所以一定到得了节点。
+            import re
             rendered = example.read_text(encoding="utf8")
-            if "judge_control_port:" in rendered:
-                import re
-                rendered = re.sub(r"^judge_control_port:\s*\d+\s*$",
-                                  f"judge_control_port: {self.control_port}",
-                                  rendered, flags=re.M)
-            else:                                   # 旧模板：补一行
-                rendered = rendered.rstrip("\n") + (
-                    f"\njudge_control_port: {self.control_port}\n")
+            rendered = _set_yaml_scalar(
+                rendered, "judge_control_port", str(self.control_port),
+                add_if_missing=True)
+            rendered = _set_yaml_scalar(
+                rendered, "camera_required",
+                "true" if self.camera else "false")
+            if self.oracle_planning:
+                # G2：只有显式开启时才让 runtime 具备 GT 规划能力。
+                rendered = _set_yaml_scalar(
+                    rendered, "oracle_planning", "true", add_if_missing=True)
             (profile / "runtime.yaml").write_text(rendered, encoding="utf8")
 
         # ★ 控制口端口的**第二份落点**：`player` 节点也要知道它。
@@ -393,6 +425,10 @@ class PersistentFlow:
     def snapshot(self) -> dict:
         """judge-only 真值（B2）。**不含**任何进 gateway 的字段。"""
         return self._get(self.control_url + "/episode/snapshot", timeout=120.0)
+
+    def timings(self) -> dict:
+        """Q14：本 flow 至今所有 Action 的执行耗时分布（judge-only）。"""
+        return self._get(self.control_url + "/episode/timings", timeout=30.0)
 
     # ── 收 episode 结果（从日志）
 

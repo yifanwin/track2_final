@@ -70,7 +70,8 @@ class ResidentRunner:
     def __init__(self, *, case_id, casebank, reference_root, bundle_root,
                  physics_root, python, skill_zip, output,
                  flow=None, seeds=None, diagnostic_rgb=True, runtime_gpu="0",
-                 skill_timeout_s=20, login: Path | None = None):
+                 skill_timeout_s=20, login: Path | None = None,
+                 oracle_planning=False):
         from track2_judge.contract.extension import TrustedContractExtension
         from track2_judge.contract.profile import load_config
         from track2_judge.runner.persistent_flow import PersistentFlow
@@ -83,7 +84,11 @@ class ResidentRunner:
         self.python = str(python)
         self.skill_zip = Path(skill_zip).resolve(strict=True)
         self.output = Path(output).resolve()
+        #: 要不要建相机（G3）。**真的会生效** —— 传进 `PersistentFlow`
+        #: → 渲染 `runtime.yaml` 的 `camera_required` → runtime 节点。
         self.diagnostic_rgb = bool(diagnostic_rgb)
+        #: 裁判侧 Oracle 的 GT 规划（G2）：规划由 **runtime 节点**在它自己的 env 上做。
+        self.oracle_planning = bool(oracle_planning)
         self.runtime_gpu = str(runtime_gpu)
         self.skill_timeout_s = float(skill_timeout_s)
         self.seeds = tuple(range(5) if seeds is None else seeds)
@@ -131,7 +136,12 @@ class ResidentRunner:
             bundle_root=self.bundle_root, physics_root=self.physics_root,
             python=self.python, log_path=output / "flow.log",
             runtime_gpu=self.runtime_gpu, work_dir=self.physics_root.parent / "work",
-            player_package=self.skill_zip)
+            player_package=self.skill_zip,
+            # ★ G3：把「要不要相机」接到 node 侧（渲染进 `runtime.yaml`）。
+            #   以前它停在 `self.diagnostic_rgb` 上没人读 —— 那是个假开关。
+            camera=self.diagnostic_rgb,
+            # ★ G2：Oracle 的 GT 规划在 runtime 侧做（裁判私有通道）。
+            oracle_planning=self.oracle_planning)
         try:
             flow.start()
             for seed in self.seeds:
@@ -142,6 +152,13 @@ class ResidentRunner:
                     print(json.dumps({k: v for k, v in record.items()
                                       if k not in ("tool_calls", "verification")},
                                      ensure_ascii=False), flush=True)
+            # ★ Q14：整轮跑完取一次动作耗时分布（**只读**，不影响判定）。
+            #   放在 `stop()` **之前** —— 停了就够不着控制口了。
+            #   取不到不算失败（它是诊断数据，不是评测产物）。
+            try:
+                self._timings = flow.timings()
+            except Exception as exc:                            # noqa: BLE001
+                self._timings = {"error": f"{type(exc).__name__}: {str(exc)[:200]}"}
         finally:
             flow.stop()
 
@@ -161,6 +178,9 @@ class ResidentRunner:
             _write_json(path, data)
         _write_json(output / "physics_health_diagnostic.json", health_reports)
         _write_json(output / "physical_trace.json", trace)
+        # Q14：动作耗时分布（`run_suite` 会汇总成 `timings_summary.json`）
+        if getattr(self, "_timings", None) is not None:
+            _write_json(output / "timings.json", self._timings)
         _write_json(output / "supplemental_verification.json", [])
         _write_json(output / "trusted_event_evidence.json", event_reports)
         _write_json(output / "skill_lifecycle.json", lifecycles)
