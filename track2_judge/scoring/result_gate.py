@@ -80,6 +80,15 @@ class ResultGate:
             # 2026-10-18：三态可评分 —— `SCORABLE_TERMINAL_STATUS`。
             # `budget_timeout` 放行；`infrastructure_timeout` 落进 EXECUTION_EXCEPTION。
             if len(diagnosis.get('episodes',[]))!=expected or any(e.get('status') not in SCORABLE_TERMINAL_STATUS for e in diagnosis.get('episodes',[])): reject('EXECUTION_EXCEPTION')
+            # ① 兜底（2026-10-18）：provider 侧动作账本不完整。
+            #
+            #   这一条**独立于 status** —— 专抓「选手把动作异常 try/except 吞掉、
+            #   然后正常返回」那一类：那时 episode 的 status 看着是
+            #   `success`/`failure`（可评分），但 provider 侧有「有 start 无 finish」
+            #   的动作。加速方案的 `infrastructure_timeout` 靠异常分类，够不着它。
+            #   见 plan/Track2_丢包自锁修复方案.md §3.1/§3.2。
+            if any(e.get('execution_integrity') == 'INCOMPLETE'
+                   for e in diagnosis.get('episodes',[])): reject('ACTION_EXECUTION_INCOMPLETE')
             if diagnosis.get('scoring_status') not in ('FROZEN_AUTHOR_PDF_RULES',None) or diagnosis.get('candidate_status') in ('EXECUTION_FAILURE',): reject('EXECUTION_EXCEPTION')
             ledger=receipt.get('artifact_sha256',{})
             for rel in required[:-1]:

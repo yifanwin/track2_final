@@ -391,12 +391,28 @@ class ToolClient:
 
 
 def _error_text(body: dict, status: int) -> str:
-    """从 Gateway 应答里取出可读错误。**不泄漏裁判侧路径。**"""
+    """从 Gateway 应答里取出可读错误。**不泄漏裁判侧路径。**
+
+    ⚠️ 两种 wire 形状都要认（2026-10-18）：
+      * `{"error": {"message": ...}}` —— 官方 gateway 的 **tool_error 路径**
+        （`tool_controller.py` 的 `_status_for_tool_error`）走这条；
+      * `{"ok": false, "msg": "..."}` —— 官方 gateway 的 **RuntimeError 路径**
+        （`_action_invoke` 的 `except RuntimeError → 503`）走这条。
+        容量耗尽（`ActionInvocationCapacityError`）正是从这里出来的。
+
+    以前只认 `error` 键，所以每次 503 都退化成兜底文案
+    `tool call failed with HTTP 503` —— 丢包自锁那类故障在日志里**完全看不出原因**。
+    （见 `plan/Track2_丢包自锁修复方案.md` §4.5）
+    """
     error = body.get("error")
     if isinstance(error, dict) and error.get("message"):
         return str(error["message"])
     if isinstance(error, str):
         return error
+    # 官方 gateway 的 msg 键（RuntimeError 路径）
+    msg = body.get("msg")
+    if isinstance(msg, str) and msg.strip():
+        return msg.strip()
     return f"tool call failed with HTTP {status}"
 
 

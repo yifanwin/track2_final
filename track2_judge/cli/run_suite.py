@@ -63,8 +63,16 @@ for i, case_id in enumerate(case_ids):
     #     * 冒烟口径（少 seed）：Gate 必然 BLOCKED（`DIAGNOSTIC_PARTIAL_SEEDS_NO_SCORE`），
     #       所以判据换成「跑完了 + episode 数对 + 每条都有结论」——
     #       这正是冒烟要回答的问题：**这一 case 起不起得来**。
+    #
+    # ⚠️ **可评分终态是三个，不是两个**（2026-10-18）：
+    #   `success` / `failure` / `budget_timeout`（正常预算耗尽）。
+    #   这里以前只认前两个 → 真策略出现正常超时时会被误判成 FAIL（假阴性）。
+    #   与 `resident_runner.SCORABLE` / `result_gate.SCORABLE_TERMINAL_STATUS` 同源；
+    #   改一处必须改三处（见 plan/Track2_丢包自锁修复方案.md §0.4）。
+    #   `infrastructure_timeout`（链路故障）**不在**其中 —— 它要判 FAIL。
+    SCORABLE_TERMINAL_STATUS = ('success', 'failure', 'budget_timeout')
     concluded = (len(d.get('episodes', [])) == expected_episodes
-                 and all(x.get('status') in ('success', 'failure')
+                 and all(x.get('status') in SCORABLE_TERMINAL_STATUS
                          for x in d.get('episodes', [])))
     if partial:
         valid = code == 0 and concluded
@@ -80,11 +88,19 @@ for i, case_id in enumerate(case_ids):
             timings = json.loads(timings_path.read_text())
         except (ValueError, OSError):
             timings = None
+    # ① 兜底判据的可见性：把「执行残缺」的 episode 数报出来，
+    #   这样汇总一行就能看出是「链路坏了」还是「策略不行」。
+    incomplete = sum(1 for e in d.get('episodes', [])
+                     if e.get('execution_integrity') == 'INCOMPLETE')
+    infra = sum(1 for e in d.get('episodes', [])
+                if e.get('status') == 'infrastructure_timeout')
     results.append({'ordinal': i, 'case_id': case_id,
                     'status': 'PASS' if valid else 'FAIL',
                     'episodes': len(d.get('episodes', [])),
                     'frozen_rule_score_100': d.get('frozen_rule_score_100'),
                     'scoring_status': d.get('scoring_status'),
+                    'episodes_incomplete': incomplete,
+                    'episodes_infrastructure_timeout': infra,
                     'action_count': (timings or {}).get('count'),
                     'action_max_s': ((timings or {}).get('quantiles') or {}).get('max')})
     print(json.dumps(results[-1]), flush=True)

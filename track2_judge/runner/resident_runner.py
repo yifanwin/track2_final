@@ -224,8 +224,16 @@ class ResidentRunner:
         #   `budget_timeout` 的物理终态是有效的（判据见 `_run_one`），照常评分；
         #   `infrastructure_timeout`（链路故障）**不**在内，它会走门禁阻断。
         SCORABLE = ("success", "failure", "budget_timeout")
+        # ① 兜底：任一 episode 的 provider 侧动作账本不完整 → 不算有效。
+        #   它与上面那两个条件**独立** —— 专抓「选手吞异常、status 看着正常」
+        #   那一类（加速方案的异常分类够不着，见 §3.1）。
+        incomplete = [r for r in runs_log
+                      if r.get("execution_integrity") == "INCOMPLETE"]
         valid = (len(runs_log) == expected
-                 and not any(r.get("status") not in SCORABLE for r in runs_log))
+                 and not any(r.get("status") not in SCORABLE for r in runs_log)
+                 and not incomplete)
+        if incomplete:
+            diagnosis["error_category"] = "ACTION_EXECUTION_INCOMPLETE"
         diagnosis["gt_access_status"] = "PASS" if valid else "FAILED"
         # ⚠️ **少跑几个 seed 就不是评测，只是冒烟。**
         #
@@ -306,6 +314,31 @@ class ResidentRunner:
         snapshot = out["snapshot"]
         elapsed = max(time.monotonic() - started, 1e-6)
 
+        # ★ ① 兜底可见性（2026-10-18）：**provider 侧的动作账本**。
+        #
+        #   加速方案的 `infrastructure_timeout` 走的是**异常分类**，挡不住
+        #   「选手把动作异常 try/except 吞掉、然后正常返回」这一种 —— 那时
+        #   player status 是 `ok`、episode 是 `success`/`failure`，门禁放行。
+        #   但 provider 侧「有 start 无 finish」的痕迹**仍然在**。
+        #
+        #   判据只取 `unfinished_or_rejected` 的**增量**（它在整轮 flow 上累积，
+        #   因为 `_executions` 跨 episode 不清）—— 不需要知道「期望动作数」，
+        #   而期望值本来就没有可信先验（弱 skill 1 次、oracle 几十次）。
+        #   见 plan/Track2_丢包自锁修复方案.md §3.2。
+        execution_integrity = "OK"
+        timings_seen = getattr(self, "_timings_seen", None)
+        try:
+            timings_now = flow.timings()
+        except Exception:                                       # noqa: BLE001
+            timings_now = None       # 取不到就不判 —— 它是兜底，不是主判据
+        if isinstance(timings_now, dict):
+            unfinished = int(timings_now.get("unfinished_or_rejected") or 0)
+            previous = 0 if timings_seen is None else int(
+                timings_seen.get("unfinished_or_rejected") or 0)
+            if unfinished > previous:
+                execution_integrity = "INCOMPLETE"
+            self._timings_seen = timings_now
+
         # ★ 判定用**最终那一轮的快照**（`final` 的中间轮次不留存 —— 原实现
         #   `capture()` 也是最后一个 attempt 覆盖前者，语义一致）。
         verification = self._verify(snapshot, mode)
@@ -369,6 +402,9 @@ class ResidentRunner:
                                      .get("lifecycle")})
         runs_log.append({"seed": seed, "mode": mode, "status": status,
                          "player_status": player_status,
+                         # ① 兜底判据：`INCOMPLETE` = provider 侧有「有 start
+                         # 无 finish」的动作（与选手是否吞异常无关）
+                         "execution_integrity": execution_integrity,
                          "attempts": int(out["attempts"]),
                          "plan_revisions": int(out["plan_revisions"]),
                          "error_category": player_status
