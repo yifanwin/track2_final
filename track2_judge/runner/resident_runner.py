@@ -355,10 +355,6 @@ class ResidentRunner:
             "recorder_runs": len(recorder.runs),
             "recorder_evidence": len(recorder.evidence),
             "packet_keys": set(self.engine.packets),
-            # `_timings_seen` 是「上一轮看到的累计 unfinished 数」的基线。
-            # 重跑要从**同一个基线**比，否则会把被丢弃那次 attempt 的残缺
-            # 算到重跑头上（→ 误判 INCOMPLETE）。
-            "timings_seen": getattr(self, "_timings_seen", None),
         }
 
     def _rollback_episode(self, marks, recorder, runs_log, health_reports,
@@ -384,8 +380,18 @@ class ResidentRunner:
         stale = set(self.engine.packets) - marks["packet_keys"]
         for key in stale:
             self.engine.packets.pop(key, None)
-        # 累计计数器的基线也要回退（见 `_mark_episode` 的说明）
-        self._timings_seen = marks["timings_seen"]
+        # ⚠️ `_timings_seen` **故意不回退**（2026-10-19 修）。
+        #
+        #   它是「上一轮看到的累计 `unfinished_or_rejected` 数」的基线，
+        #   而那个计数在 **provider 侧跨 episode 累积、reset 不清**
+        #   （`endpoints.py` 的 `_executions` 是刻意的整轮账本）。
+        #   所以被丢弃那次留下的残缺**不会消失**。
+        #   若这里把它退回到**本轮之前**的旧基线，重跑读到的是同一个（含残留的）
+        #   计数 → 判成「增量 > 0」→ `INCOMPLETE` → **整个 case 不可发布** ——
+        #   恰好废掉重测要救的场景。
+        #   正确做法：`_run_one` 结束时已把 `_timings_seen` 刷成**本轮的真实计数**
+        #   （见该函数里 `self._timings_seen = timings_now`），回滚时保持不动即可 ——
+        #   重跑从这个「已含残留」的基线起算，只有**重跑期间新增的**残缺才判 INCOMPLETE。
 
     def _run_one(self, flow, recorder, seed, runs_log, health_reports,
                  event_reports, lifecycles, trace) -> dict:

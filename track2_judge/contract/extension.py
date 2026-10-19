@@ -180,6 +180,6 @@ class TrustedContractExtension:
                 # ⚠️ 旧分：**仅作 legacy diagnostic**，不是正式验收指标（§3.6）。
                 'legacy_diagnostic':{'note':'旧口径（V3 summarize）已停用，语义不同，不做提升/下降解释'},
                 'frozen_rule_score_100':None,'official_score':None,
-                'formula':'continuous terminal-state scoring (target 70 + preserve 30)',
+                'formula':'continuous terminal-state scoring (S = max(0, S_target - P_disturb))',
                 'contract_status':'FROZEN_AUTHOR_PDF_RULES' if confirmed else 'DIAGNOSTIC_EXTENSION',
                 'private_evidence_sha256':hashlib.sha256(path.read_bytes()).hexdigest()}

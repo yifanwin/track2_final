@@ -95,13 +95,18 @@ python work/scripts/run_oracle_case.py --case-id <case_id>
 | `client.py` | 选手侧 `tools` 对象 + `SandboxBridge` + `EpisodeTools` |
 | `dispatch.py` | 原 `adapter.py` + `GatewayExecutor` 适配层 |
 
-三个 ToolSpec 的冻结哈希（PAOS 的 `canonical_sha256`）：
+三个 ToolSpec 的冻结哈希（PAOS 的 `canonical_sha256`；2026-10-19 用
+`toolenv/.venv/bin/python -c "from track2_judge.toolapi import schema; ..."` 现算）：
 
 ```
-track2.env.observe               0c089c48072b5ff20bd38571df4f4d4ebc307fc8596c9872cdb387d7e5838bc2
-track2.robot.joint_control       b4bf870877b16169d1f49ff5290eb3d64a005191bcd46d0221d2cfcd142c2edf
+track2.env.observe               46756856af4269d17e5af7801b66e5d1eacb8e1b65888e18b37ffdab420bfeb7
+track2.robot.joint_trajectory    885e50ed4e16b918994eb97c085535913876fa2b5f523ed0672c3ad4bc1159ca
 track2.robot.gripper_control     b7070934d01283a2bc689ab7ad4554a9e92b4a7ada748aa3ad1fc66d760bfa50
 ```
+
+> ⚠️ 这里**只是文档**，运行时不读它 —— 真源是 `toolapi/schema.py`，
+> ToolSpec 改了就重跑上面的命令重算。旧版本曾把第二行写成已删除的
+> `track2.robot.joint_control` 且哈希对不上（2026-10-18 起 `joint_control` 已删）。
 
 **Action 治理**（Q9 / Q12 / Q13）：三层语义刻意分离 ——
 `cancel_status`（请求处理了没）/ `cancel_effective`（取消真的阻止了物理没）/

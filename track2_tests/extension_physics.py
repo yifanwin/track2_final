@@ -62,7 +62,7 @@ def main(output):
         else:raise AssertionError('state tamper accepted')
     finally:path.write_bytes(before)
     result={'status':'PASS','new_function':'four PDF single-arm task types through original lifecycle, real Piper/PhysX, trusted Recorder and candidate predicate scoring','state_timing_tamper':'REJECTED by independent evidence replay','episodes':20,'per_task_score_100':[t['score_100'] for t in score['tasks']],
-            'candidate_score_100':score['candidate_score_100'],'official_score':None,'P5':'trusted substep sequence PASS; no standalone weight','formula':'continuous terminal-state scoring (target 70 + preserve 30)','scope':'synthetic functional fixture; not TTG difficulty calibration'}
+            'candidate_score_100':score['candidate_score_100'],'official_score':None,'P5':'trusted substep sequence PASS; no standalone weight','formula':'continuous terminal-state scoring (S = max(0, S_target - P_disturb))','scope':'synthetic functional fixture; not TTG difficulty calibration'}
     (root/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result))
 
 if __name__=='__main__':
