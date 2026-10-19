@@ -153,6 +153,8 @@ class ManiSkillSimulatorAdapter:
         if previous is None:return q,g
         target=np.r_[q,g];dt=float(self.__env.control_timestep)
         # Conservative internal command slew budget, below URDF 5 rad/s, 3m/s.
+        # 步间限幅 = 1.0 rad/s × dt(=1/20 s) = **0.05 rad/步**（臂）；
+        # 夹爪 0.12 m/s × dt = 0.006 m/步。
         if np.any(np.abs(target-np.asarray(previous,dtype=float))>np.r_[[1.]*6,.12]*dt+1e-7):raise ValueError('target slew exceeded')
         return q,g
 

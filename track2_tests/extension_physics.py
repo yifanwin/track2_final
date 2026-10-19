@@ -36,18 +36,18 @@ def main(output):
     assert len(diagnostic['episodes'])==20 and 'extension_candidate_score_100' in diagnostic,diagnostic
     score=json.loads((root/'closure/extension_candidate_score.json').read_text());assert score['official_score'] is None
     assert score['frozen_rule_score_100'] is None,score
-    # ★ 2026-10-18 终态连续评分：没有 SR / sigma 了。每 task 给
-    #   `score_100`（[0,100]，目标 70 + 保持 30）。仍然保留「成功 / 部分成功」的区分：
+    # ★ 2026-10-19 终态连续评分（新版）：没有 SR / sigma 了。每 task 给
+    #   `score_100`（[0,100] = 目标分 − 扰动处罚）。仍然保留「成功 / 部分成功」的区分：
     #   * task[0]（pick）在原口径下 SR_final==2/3 —— 只是**部分成功**；
     #   * task[1:]（attribute / spatial / organize）SR_final==1 —— **全部成功**。
     #   新分下没有二值 SR，但成功度必须体现在分数上：
-    #     - 四个 task 的 `P1` 硬门都过（分数都 ≥ 30，且目标项 ≥ 30）；
-    #     - 非目标保持项满（终态无位移 ⇒ 无物可碰 = 完美保持 → +30）；
+    #     - 四个 task 的 `P1` 硬门都过（目标项都 ≥ 30）；
+    #     - 非目标**零扰动**（终态无位移 ⇒ 无物可碰 → 处罚 0）；
     #     - **部分成功的 task[0] 分数必须严格低于全部成功的 task[1:]**。
     assert len(score['tasks'])==4,score
     assert all(0<=t['score_100']<=100 for t in score['tasks']),score
     assert all(t['score_target']>=30 for t in score['tasks']),score   # P1 硬门均通过 ⇒ 目标项 ≥ 30
-    assert all(t['score_preserve']==30 for t in score['tasks']),score
+    assert all(t['penalty_disturb']==0 for t in score['tasks']),score
     assert score['tasks'][0]['score_100']<min(t['score_100'] for t in score['tasks'][1:]),score
     assert abs(score['candidate_score_100']-sum(t['score_100'] for t in score['tasks'])/4)<1e-9,score
     submission=json.loads((root/'closure/runs.json').read_text());mutated=copy.deepcopy(submission);mutated['runs'][0]['elapsed_s']+=1

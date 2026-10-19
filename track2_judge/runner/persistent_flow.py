@@ -494,9 +494,10 @@ class PersistentFlow:
         """下发一个 episode，按 `mode` 跑 1 次或最多 `max_attempts` 次。
 
         `verdict(attempt, snapshot) -> bool` 是**裁判的判定回调**：
-        返回 True = 这一轮成功，**提前收工**；返回 False = 失败，按 `final`
-        的语义在当前物理状态上追加一次（**不 reset**）。
-        不给这个回调就盲目跑满 `max_attempts` 次 —— 那只适合压测。
+        返回 True = 这一轮成功，**提前收工**。
+        ⚠️ 取消 first/final 后**不再有**「失败后不 reset 追加执行」——
+        `max_attempts` 恒为 1。判定的结果由 `resident_runner` 决定要不要
+        **重测整轮**（那是 `reset` 之后重来，不是在同一状态上追加）。
 
         ⚠️ **判定必须由裁判做，不能看选手自己报的 `status`。**
         `snapshot["player"]["result"]["status"]` 只说明「选手进程正常退出了」，
@@ -504,8 +505,7 @@ class PersistentFlow:
         真正的判定是拿 `snapshot` 跑 `FrozenVerifier` / `TrustedContractExtension`
         —— 这正是「循环归 Judge」的字面意思：**中间那次 verify 在裁判侧**。
 
-        返回值里 `attempts` 是**实际执行了几次**，
-        `plan_revisions = attempts - 1`（与 `candidate_runner.py` 一致）。
+        返回值里 `attempts` 是**实际执行了几次**（单模式下恒为 1）。
         """
         self.drain_results()
         record = self.reset(case_id, seed)

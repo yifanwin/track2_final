@@ -32,7 +32,6 @@
 import json
 import math
 
-from track2_judge.observation.camera_calibration import CALIBRATION_FIELD
 from track2_judge.observation.provider import ObservationProvider
 from track2_judge.scoring.scorer_bridge import v3
 
@@ -59,10 +58,8 @@ def project(task, *, reference_image=None, camera_calibration=None):
     的产物（`rgb_payload` 形状）。**必须给** —— 模式 B 下它是选手唯一的
     目标信息来源；不给就只剩一句自然语言指令，信息量不足以完成任务。
 
-    `camera_calibration` 是 `observation.camera_calibration.camera_calibration()`
-    的产物。它**不是答案**（由**初始布局**算出的机位），但**必须给** ——
-    没有它，选手拿到图也不知道像素对应世界的哪里，「从图里定位物体」做不了。
-    详见 `camera_calibration.py` 的模块说明。
+    ⚠️ 2026-10-19：**不再接受 `camera_calibration`** —— 公开输入里没有
+    「像素↔世界」的换算表了（选手靠图像比对定位/伺服）。传了会明确报错。
     """
     if task.get('task_type') != 'pick_place':
         raise ValueError('public profile supports only the confirmed 73 pick/place tasks')
@@ -96,19 +93,25 @@ def project(task, *, reference_image=None, camera_calibration=None):
     }
     if reference_image is not None:
         raw['reference_image'] = reference_image
+    # ★ 2026-10-19：`camera_calibration` **不再进公开输入**（口径变更）。
+    #
+    #   参数保留只为**兼容既有诊断脚本的调用签名**；传了会**明确报错**，
+    #   而不是悄悄放行 —— 免得让人以为"这个口子还开着"。
     if camera_calibration is not None:
-        # ⚠️ 标定**故意绕过 `_reject_numbers`** —— 它按定义就是数值（机位/跨度）。
-        #    它是「怎么看」，不是「答案是什么」：只用**初始布局** + 机器人基座算，
-        #    不碰 `target_layout`。`_reject_numbers` 管的是**目标**数值，
-        #    不是相机几何 —— 两者要分清，否则会把选手唯一的换算依据也扫掉。
-        raw[CALIBRATION_FIELD] = dict(camera_calibration)
+        raise ValueError(
+            'camera_calibration is no longer a public input field (2026-10-19); '
+            'drop the argument')
 
     encoded = json.dumps(raw, allow_nan=False)
     if len(encoded) > 16384 * 8:
         raise ValueError('public task budget')
+    # ⚠️ 白名单里**不再列 `camera_calibration`**（2026-10-19 起它是未批准字段
+    #    —— `provider.ALLOWED_FIELDS` 也同步移除了它）。
+    #    若调用方仍显式传 `camera_calibration=`，`prepare()` 会**明确报错**
+    #    （`unknown public field`），而不是悄悄放行。
     return ObservationProvider(
         approved_fields=('text_instruction', 'reference_image', 'predicates',
-                         'constraints', CALIBRATION_FIELD)
+                         'constraints')
     ).prepare(raw)
 
 
@@ -126,8 +129,8 @@ def public_task_inputs(bundle, *, reference_root, case_id: str | None = None,
         public = public_task_inputs(bundle, reference_root=REFERENCE_ROOT,
                                     case_id=case_id, camera=diagnostic_rgb)
 
-    ⚠️ `camera` 决定要不要放 `camera_calibration`。它是「怎么看」（由**初始布局**
-    算出），不是答案。CPU 回归可以不放。
+    ⚠️ `camera` 只决定**要不要建相机**（`images.camera` 有没有）——
+    它**不再**影响公开输入里放什么（标定已彻底不给）。
     """
     import json as _json
     from pathlib import Path as _Path
@@ -145,15 +148,14 @@ def public_task_inputs(bundle, *, reference_root, case_id: str | None = None,
             f"no pre-rendered reference image for {case}; run "
             f"work/scripts/prerender_reference_images.py")
 
-    calibration = None
-    if camera:
-        from track2_judge.observation.camera_calibration import camera_calibration
-        from track2_judge.scenario.env_factory import fixed_camera_from_bundle
-        # 与参考图**同机位**：都用 seed 0（参考图就是按 seed 0 预渲染的）
-        calibration = camera_calibration(fixed_camera_from_bundle(bundle, 0))
-
-    return project(task, reference_image=reference,
-                   camera_calibration=calibration)
+    # ★ 2026-10-19：**不再构造 / 注入 `camera_calibration`**（口径变更）。
+    #
+    #   以前 `camera=True` 时会把「像素 ↔ 世界」的标定放进公开输入。现在撤回 ——
+    #   选手只能靠参考图与实时帧的图像比对定位/伺服。
+    #
+    #   ⚠️ `camera` 参数**保留** —— 它仍控制**相机要不要建**（`images.camera`
+    #   有没有），那是「能不能看见」；与「给不给换算表」是两件事，别混。
+    return project(task, reference_image=reference)
 
 
 def _reject_numbers(value, *, where: str) -> None:

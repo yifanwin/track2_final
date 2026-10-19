@@ -130,7 +130,8 @@ class TrustedContractExtension:
         return {'completion':completion,'s':score,'strict_success':strict,'success':strict,'status':'success' if strict else 'inconclusive' if any(r['status']=='inconclusive' for r in results) else 'failure',
                 'predicates':results,'violation_count':violations,'constraints':constraint_details,'P5':p5,
                 'preserve_displacements':preserve,
-                'score_target':continuous['score_target'],'score_preserve':continuous['score_preserve'],
+                'score_target':continuous['score_target'],
+                'penalty_disturb':continuous['penalty_disturb'],
                 'score_100':continuous['score_100'],
                 'scoring_engine':'trusted candidate extension + continuous terminal-state scorer','official_score':None}
     def capture(self,task,seed,initial_state,final_state,result,config,event_evidence,initial_layout,final_layout,static_objects=()):
@@ -168,7 +169,7 @@ class TrustedContractExtension:
             per_task.append({'task_id':task['task_id'],'tier':task['tier'],
                              'score_100':score_100,
                              'score_target':sum(by_seed[s]['score_target'] for s in sorted(by_seed))/len(scores),
-                             'score_preserve':sum(by_seed[s]['score_preserve'] for s in sorted(by_seed))/len(scores),
+                             'penalty_disturb':sum(by_seed[s]['penalty_disturb'] for s in sorted(by_seed))/len(scores),
                              'episodes':len(scores)})
         path=Path(base_dir)/'extension_private_evidence.json';path.write_text(json.dumps({str(k):v for k,v in self.packets.items()},allow_nan=False));path.chmod(0o600)
         from track2_judge.contract.profile import PROFILE

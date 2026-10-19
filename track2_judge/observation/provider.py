@@ -5,11 +5,10 @@ import numpy as np
 from track2_judge.util.common import plain
 
 ALLOWED_FIELDS={'text_instruction','reference_image','predicates','constraints',
-               # 相机标定（2026-10-17）：把「图像像素」映射回「世界坐标」的那几个量
-               # （机位 / 视场角 / 画面跨度）。**不是答案** —— 由**初始布局**算，
-               # 与目标无关。没有它，选手拿到图也不知道像素对应世界哪里。
-               # 见 `observation/camera_calibration.py`。
-               'camera_calibration',
+               # ⚠️ 2026-10-19：`camera_calibration` **已从公开输入白名单移除**
+               #    （口径变更）—— 不再把「像素↔世界」的换算表给选手。
+               #    `observation/camera_calibration.py` 仍然存在（诊断/测试可用），
+               #    只是不再进选手可见的公开输入。
                # ★ 裁判侧 Oracle 专用（第 6 步）：GT 规划结果经**唯一入口**下发。
                #   普通选手拿不到 —— `select_case.run()` 只有在显式传
                #   `oracle_plan=` 时才会把它放进公开输入。

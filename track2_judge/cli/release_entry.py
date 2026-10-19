@@ -37,15 +37,16 @@ def main():
     #
     # ⚠️ 关掉它 = 把这条链路降级成「没有视觉」（2026-10-17 起真的会生效）：
     #     * `images.camera` 不存在（`camera_status` 为 `NOT CONFIGURED`）
-    #     * `task_inputs.camera_calibration` 也**没了** —— 选手失去「像素 → 世界」
-    #       的唯一依据（选手指南 §2.5b 的公式失效）
     #     * `task_inputs.reference_image` **仍在**（它来自预渲染文件，不依赖相机）
+    #
+    #   ★ 2026-10-19：`task_inputs.camera_calibration` **已彻底移除**（不再是公开
+    #   字段）—— 与这个开关无关，开不开相机都不给。选手靠**参考图与实时帧的
+    #   图像比对**定位/伺服。
     #
     #   所以它的用途只有两个：**CPU 回归**（无 GPU 环境）、以及定位
     #   「是不是渲染把链路弄挂的」。**正式评测永远不要带这个参数。**
     p.add_argument('--no-camera', dest='camera', action='store_false', default=True,
-                   help='关相机（CPU 回归/排查用）：images.camera 与 '
-                        'task_inputs.camera_calibration 都会消失。正式评测不要带')
+                   help='关相机（CPU 回归/排查用）：images.camera 会消失。正式评测不要带')
     # ── C2：走**常驻 PAOS flow**（唯一的选手执行链）
     #
     # 从 2026-10-17 起默认就是它。`--legacy-in-process` 保留旧路（在裁判进程里

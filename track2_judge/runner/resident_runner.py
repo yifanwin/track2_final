@@ -50,7 +50,18 @@ import os
 import time
 from pathlib import Path
 
-__all__ = ["ResidentRunner", "ResidentRunError"]
+__all__ = ["ResidentRunner", "ResidentRunError", "EPISODE_RETRIES"]
+
+#: **链路故障的 episode 级重测次数**（2026-10-19）。
+#:
+#: 只对 `infrastructure_timeout`（丢包 / 503 / 动作超时且物理状态不明）生效 ——
+#: 那是**基础设施的问题，不是选手的问题**，不该让他丢一整个 case。
+#: 实测该故障发生率约 **0.8%**（250 episode 里 2 次），所以 1 次重试已足够；
+#: 给 2 次是留余量。
+#:
+#: ⚠️ **`skill_error` / `budget_timeout` / `failure` 都**不重试 —— 那些是选手
+#:   或物理的真实结果，重试等于篡改成绩。
+EPISODE_RETRIES = 2
 
 
 class ResidentRunError(RuntimeError):
@@ -168,11 +179,37 @@ class ResidentRunner:
         try:
             flow.start()
             # ★ 2026-10-18 取消 first/final：每 seed **1** 次（单 case = 5 episode）。
+            #
+            # ★ 2026-10-19 episode 级重测：`infrastructure_timeout`（链路故障：
+            #   丢包 / 503 / 动作超时且物理状态不明）**不是选手的错**，不该让他
+            #   丢掉一整个 case。同一个 seed **重建场景重跑**，最多
+            #   `EPISODE_RETRIES` 次；只有**全部重试仍失败**才如实判 FAILED。
+            #
+            #   ⚠️ 重跑必须**干净地丢弃**上一次的产物（见 `_rollback_episode`）——
+            #   否则 `recorder.runs` / `engine.packets` 里会留下两次 attempt，
+            #   `extension.evaluate()` 的 `len(runs) != len(tasks)*R` 直接 `ValueError`。
             for seed in self.seeds:
-                    record = self._run_one(flow, recorder, seed,
-                                           runs_log, health_reports,
-                                           event_reports, lifecycles, trace)
-                    print(json.dumps({k: v for k, v in record.items()
+                    retries = 0
+                    for attempt in range(EPISODE_RETRIES + 1):
+                        marks = self._mark_episode(recorder, runs_log, health_reports,
+                                                   event_reports, lifecycles, trace)
+                        record = self._run_one(flow, recorder, seed,
+                                               runs_log, health_reports,
+                                               event_reports, lifecycles, trace)
+                        if record["status"] != "infrastructure_timeout":
+                            break
+                        if attempt >= EPISODE_RETRIES:
+                            break
+                        retries += 1
+                        print(json.dumps({"seed": seed, "episode_retry": retries,
+                                          "reason": record["status"]},
+                                         ensure_ascii=False), flush=True)
+                        self._rollback_episode(marks, recorder, runs_log, health_reports,
+                                               event_reports, lifecycles, trace)
+                    # 重试次数如实记进本 episode（诊断用，不进分）
+                    if retries:
+                        runs_log[-1]["episode_retries"] = retries
+                    print(json.dumps({k: v for k, v in runs_log[-1].items()
                                       if k not in ("tool_calls", "verification")},
                                      ensure_ascii=False), flush=True)
             # ★ Q14：整轮跑完取一次动作耗时分布（**只读**，不影响判定）。
@@ -292,6 +329,63 @@ class ResidentRunner:
         return diagnosis
 
     # ── 一个 episode
+
+    def _mark_episode(self, recorder, runs_log, health_reports,
+                      event_reports, lifecycles, trace) -> dict:
+        """记录**本轮 episode 之前的**状态，供 `_rollback_episode` 回退。
+
+        `_run_one` 会往 6 个地方写东西：
+
+        ```text
+        runs_log / health_reports / event_reports / lifecycles / trace   ← 都是 list
+        recorder.runs / recorder.evidence                                ← recorder 内部
+        self.engine.packets                                              ← 判定包的 dict
+        ```
+
+        前 5 个是 append-only 的 list —— 记下长度即可 `del [n:]`。
+        后两个是 dict/list，用**快照 key 集合**回退（它们按
+        `(task_id, seed)` / 顺序键写入，所以按 key 删是精确的）。
+        """
+        return {
+            "runs_log": len(runs_log),
+            "health_reports": len(health_reports),
+            "event_reports": len(event_reports),
+            "lifecycles": len(lifecycles),
+            "trace": len(trace),
+            "recorder_runs": len(recorder.runs),
+            "recorder_evidence": len(recorder.evidence),
+            "packet_keys": set(self.engine.packets),
+            # `_timings_seen` 是「上一轮看到的累计 unfinished 数」的基线。
+            # 重跑要从**同一个基线**比，否则会把被丢弃那次 attempt 的残缺
+            # 算到重跑头上（→ 误判 INCOMPLETE）。
+            "timings_seen": getattr(self, "_timings_seen", None),
+        }
+
+    def _rollback_episode(self, marks, recorder, runs_log, health_reports,
+                          event_reports, lifecycles, trace) -> None:
+        """把一个失败的 episode 留下的产物**彻底清掉**，好让重跑从干净状态开始。
+
+        ⚠️ 不清的话 `recorder.runs` 会有两条同 seed 记录 →
+        `extension.evaluate()` 的 `len(runs) != len(tasks)*R` 直接 `ValueError`
+        → 整个 case 反而更糟。
+
+        ⚠️ `recorder.states_dir` 下那对 `<stem>_initial/final.json` **不删** ——
+        重跑会**用同一个 stem 覆盖**它们（stem 只含 task_index/seed，不含 attempt），
+        所以不会残留第二份；删反而多一次 IO 且可能与正在写的文件打架。
+        """
+        del runs_log[marks["runs_log"]:]
+        del health_reports[marks["health_reports"]:]
+        del event_reports[marks["event_reports"]:]
+        del lifecycles[marks["lifecycles"]:]
+        del trace[marks["trace"]:]
+        del recorder.runs[marks["recorder_runs"]:]
+        del recorder.evidence[marks["recorder_evidence"]:]
+        # `engine.packets` 是 dict —— 按 key 回退到快照那一刻
+        stale = set(self.engine.packets) - marks["packet_keys"]
+        for key in stale:
+            self.engine.packets.pop(key, None)
+        # 累计计数器的基线也要回退（见 `_mark_episode` 的说明）
+        self._timings_seen = marks["timings_seen"]
 
     def _run_one(self, flow, recorder, seed, runs_log, health_reports,
                  event_reports, lifecycles, trace) -> dict:

@@ -93,11 +93,13 @@ def run(observation,tools):
     obs=tools.observe();q=obs['robot']['joint_position'];previous=STATE.setdefault('command',list(q[:6])+[q[6]-q[7]])
     current=rt(quatrot(obs['robot']['tcp_quaternion_wxyz']),obs['robot']['tcp_position_m']);base=mm(current,inv(fk(q[:6])))
     p=next(x for x in obs['task_inputs']['predicates'] if x['type']=='P2')
-    # ⚠️ 模式 B（第 5 步）后公开输入里**没有 `target_pose` 了**。
-    #    这个诊断基准原来靠它拿目标位置；现在改成**从参考图里视觉定位**，
-    #    标定从 `task_inputs.camera_calibration` 取（2026-10-17 起是**正式字段**，
-    #    不再是 `text_instruction` 里的 `DIAGNOSTIC_RGB_CAMERA=` 前缀），
-    #    拿不到就明确失败 —— **不用隐藏状态兜底**。
+    # ⚠️ 2026-10-19 口径变更：公开输入里**不再有 `camera_calibration`**。
+    #    这个诊断基准原来靠「标定 + 颜色阈值定位像素」把目标映回世界坐标；
+    #    现在那条路**走不通了**（`calibration` 恒 None）→ 直接落到下面的
+    #    「no public target source」明确失败分支。
+    #
+    #    **不补任何隐藏状态兜底** —— 这正是这个诊断存在的意义：它如实报告
+    #    「只凭公开输入做不到」，而不是偷偷用答案把分数做漂亮。
     goal=None
     grip=None
     calibration=(obs.get('task_inputs') or {}).get('camera_calibration')
@@ -122,7 +124,7 @@ def run(observation,tools):
         # 这个诊断基准不用任何隐藏状态兜底（那正是它存在的意义）。
         STATE['done']=True
         return {'status':'completed',
-                'baseline':'no public target source available (mode B: reference image + camera calibration required)',
+                'baseline':'no public target source available (2026-10-19: camera_calibration withdrawn; image-only localization not implemented in this diagnostic)',
                 'target_label':p['object']}
     rotation=mm([row[:3] for row in base[:3]],[[-1,0,0],[0,1,0],[0,0,-1]])
     points=[('pregrasp',[grip[0],grip[1],grip[2]+.10],.1,140),('approach',grip,.1,120),

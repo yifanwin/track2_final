@@ -152,9 +152,9 @@ def run(case_id, skill_zip, output, *, allow_unapproved_diagnostics=False,
         #    `target_pose` 了）。改成与参考图/实时帧同一套固定机位：
         #    从**初始布局**算，与目标无关。
         #
-        # ⚠️ 标定**已经在上面放进公开输入**（`task_inputs.camera_calibration`），
-        #    这里只再算一次给建相机用 —— 两次是同一个
-        #    `fixed_camera_from_bundle(bundle, 0)`，结果必然一致。
+        # ★ 2026-10-19：`camera_calibration` **已不再放进公开输入**。
+        #    这里仍算一次机位，但**只用于建相机**（`images.camera`），
+        #    与「给不给选手换算表」无关。
         from track2_judge.scenario.env_factory import fixed_camera_from_bundle
         camera_specs = fixed_camera_from_bundle(bundle, 0)
 
