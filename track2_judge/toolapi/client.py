@@ -5,7 +5,7 @@
 | 视角 | 看到什么 |
 |---|---|
 | **PAOS** | 真正的 Action：202 + `invocation_id` + `attempt_id`，可轮询、可取消 |
-| **选手** | `tools.joint_control(q, g)` 一次调用拿到结果 —— **形状与现状完全一致** |
+| **选手** | `tools.joint_trajectory(targets)` 一次调用走一段轨迹（8–25 步）|
 
 异步生命周期封装在这个类内部：
 
@@ -88,6 +88,19 @@ class ToolCallError(RuntimeError):
 
 class ActionTimeout(ToolCallError):
     """Action 超时，且**已确认物理已停**（`stopped_confirmed`）。"""
+
+
+class ControlBudgetExhausted(ToolCallError):
+    """**控制步预算用满**（F1 / 2026-10-18）。
+
+    以前这条和别的执行失败一样走 `ToolCallError` → `infrastructure_timeout`
+    → **Gate BLOCKED**。但「预算正常用满」是**可评分**的 `budget_timeout`
+    （到点冻结物理、照常按终态判分），不是链路故障。
+    所以给它**专用类型**，让它从 `ToolCallError` 的其余成员里分出来。
+
+    ⚠️ 它**不继承** `ActionTimeout`（那是链路故障那一支）。
+    """
+    code = "TRACK2_CONTROL_BUDGET_EXHAUSTED"
 
 
 class ActionStoppedUnknown(ActionTimeout):
@@ -251,15 +264,18 @@ class ToolClient:
 
     # ── Action（对外仍是「调用即返回」）
 
-    def joint_control(self, joint_position, gripper_opening_m, **kwargs: Any) -> dict:
-        """下发一步关节目标 + 夹爪开度。
+    def joint_trajectory(self, targets, **kwargs: Any) -> dict:
+        """下发一段关节轨迹（Action Chunk，8–25 步）。
 
-        内部走完整 Action 生命周期；对选手就是一次调用。
+        每项形如 `{"joint_position": [6], "gripper_opening_m": float}`。
+        **这是唯一的关节移动途径** —— 旧的 `joint_control` 已删除。
+        整段先校验、整段执行；中间某步越限则**整条拒绝**（物理零推进）。
         """
-        arguments = {"joint_position": list(joint_position),
-                     "gripper_opening_m": float(gripper_opening_m)}
+        arguments = {"targets": [{"joint_position": list(t["joint_position"]),
+                                  "gripper_opening_m": float(t["gripper_opening_m"])}
+                                 for t in targets]}
         arguments.update(kwargs)
-        return self._run_action("track2.robot.joint_control", arguments)
+        return self._run_action("track2.robot.joint_trajectory", arguments)
 
     def gripper_control(self, gripper_opening_m, **kwargs: Any) -> dict:
         """只动夹爪，关节目标保持在上一次。"""
@@ -267,13 +283,12 @@ class ToolClient:
         arguments.update(kwargs)
         return self._run_action("track2.robot.gripper_control", arguments)
 
-    # ── 兼容别名（现状选手代码可继续跑）
-
-    def step(self, joint_position, gripper_opening_m, **kwargs: Any) -> dict:
-        return self.joint_control(joint_position, gripper_opening_m, **kwargs)
-
-    def piper_joint_control(self, joint_position, gripper_opening_m, **kwargs: Any) -> dict:
-        return self.joint_control(joint_position, gripper_opening_m, **kwargs)
+    # ── 兼容别名
+    #
+    # ⚠️ **2026-10-18 强制 chunk**：`step` / `joint_control` / `piper_joint_control`
+    #    **已真删** —— 留着它们等于给选手留一条逐次调用的后门（别名映射到同一个
+    #    Tool ID）。老包调旧名一律 `AttributeError`，**不给兼容期**。
+    #    只有夹爪的旧名保留（它是单步语义，未变）。
 
     def piper_gripper_control(self, gripper_opening_m, **kwargs: Any) -> dict:
         return self.gripper_control(gripper_opening_m, **kwargs)
@@ -335,13 +350,17 @@ class ToolClient:
         if not payload:
             status, body = self._transport.action_result(invocation_id)
             if status != 200 or not body.get("ok"):
-                raise ToolCallError(_error_text(body, status))
+                text = _error_text(body, status)
+                # ★ F1 兜底：这条路径也会撞「预算用满」，同样归可评分终态。
+                code = ((body.get("error") or {}).get("code")
+                        if isinstance(body.get("error"), dict) else None)
+                _raise_action_failure(tool_id, "failed",
+                                      {"message": text, "code": code or ""})
             result_data = body["data"]
             outcome, payload, error = action_outcome(result_data)
 
         if outcome != OUTCOME_SUCCEEDED:
-            detail = error.get("message") or error.get("code") or "no detail"
-            raise ToolCallError(f"{tool_id} {outcome}: {detail}")
+            _raise_action_failure(tool_id, outcome, error)
 
         self.action_steps += 1
         return payload
@@ -390,6 +409,20 @@ class ToolClient:
             f"(execution_status={execution_status!r})")
 
 
+def _raise_action_failure(tool_id: str, outcome: str, error: dict) -> "Exception":
+    """把 Action 失败**分类**后抛出。
+
+    ★ F1（2026-10-18）：控制步预算用满 = **可评分**的 `budget_timeout`，
+    不是链路故障。以前它和别的失败一样是 `ToolCallError` → `infrastructure_timeout`
+    → **Gate BLOCKED**，把「正常把预算用满」误报成不可发布。
+    """
+    detail = error.get("message") or error.get("code") or "no detail"
+    if (error.get("code") == "TRACK2_CONTROL_BUDGET_EXHAUSTED"
+            or "control budget exhausted" in str(detail)):
+        raise ControlBudgetExhausted(f"{tool_id} {outcome}: {detail}")
+    raise ToolCallError(f"{tool_id} {outcome}: {detail}")
+
+
 def _error_text(body: dict, status: int) -> str:
     """从 Gateway 应答里取出可读错误。**不泄漏裁判侧路径。**
 
@@ -419,12 +452,14 @@ def _error_text(body: dict, status: int) -> str:
 # ─────────────────────────────────────────── 沙箱侧的调用桥
 
 # 沙箱内选手用 JSON-lines 发过来的方法名 → `ToolClient` 的方法。
-# 这是**方法名兼容层**：旧选手代码里的 `tools.step(...)` 仍然能用。
+#
+# ⚠️ **2026-10-18 强制 chunk**：`step` / `joint_control` / `piper_joint_control`
+#    **已真删**（不是映射到别处 —— 是**不存在**）。只删主方法而留着别名，
+#    等于给选手留一条逐次调用的后门。老包调旧名 → `AttributeError`。
+#    见 `plan/Track2_强制ActionChunk_契约设计.md` §3.3。
 _METHOD_ALIASES = {
     "observe": "observe",
-    "step": "joint_control",
-    "joint_control": "joint_control",
-    "piper_joint_control": "joint_control",
+    "joint_trajectory": "joint_trajectory",
     "gripper_control": "gripper_control",
     "piper_gripper_control": "gripper_control",
 }
@@ -437,10 +472,10 @@ class SandboxBridge:
     `__call__`。原来它直接打 adapter（评测器内部），现在改为**经 Gateway**：
 
     ```text
-    沙箱内 tools.joint_control(q, g)
-        → JSON-lines  {"type":"tool_call","tool":"joint_control","arguments":{...}}
-        → SandboxBridge.__call__("joint_control", {...})
-        → ToolClient.joint_control(q, g)
+    沙箱内 tools.joint_trajectory(targets)
+        → JSON-lines  {"type":"tool_call","tool":"joint_trajectory","arguments":{...}}
+        → SandboxBridge.__call__("joint_trajectory", {...})
+        → ToolClient.joint_trajectory(targets)
         → Gateway /tools/{id}:invoke → 202 → 轮询 → result
         → 物理
     ```
@@ -468,13 +503,11 @@ class SandboxBridge:
         if target == "observe":
             extra = {k: v for k, v in payload.items()}
             result = self.client.observe(**extra)
-        elif target == "joint_control":
-            q = payload.get("joint_position")
-            g = payload.get("gripper_opening_m")
-            if q is None or g is None:
-                raise ToolCallError(
-                    "joint_control requires joint_position and gripper_opening_m")
-            result = self.client.joint_control(q, g)
+        elif target == "joint_trajectory":
+            targets = payload.get("targets")
+            if not isinstance(targets, list):
+                raise ToolCallError("joint_trajectory requires a targets list")
+            result = self.client.joint_trajectory(targets)
         else:                                  # gripper_control
             g = payload.get("gripper_opening_m")
             if g is None:
@@ -560,6 +593,12 @@ def action_outcome(data: dict) -> tuple[str, dict, dict]:
     error = result.get("error") or data.get("error") or {}
     if not isinstance(error, dict):
         error = {"message": str(error)[:200]}
+    # ★ F1：本地形状里 `data.error` 是**字符串**（丢了 code）。把顶层/数据层的
+    #   `error_code` 补回 error 字典，供 `_run_action` 分类。
+    for source in (data, result):
+        code = source.get("error_code") if isinstance(source, dict) else None
+        if code and "code" not in error:
+            error["code"] = code
     return outcome, payload, error
 
 

@@ -43,8 +43,8 @@ from typing import Any, Callable
 __all__ = ["CaseSession", "build_case_session", "camera_closure"]
 
 #: 默认预算。**必须显式传** —— 留默认值是漂移的温床（见模块说明）。
-DEFAULT_MAX_STEPS = 2400
-DEFAULT_MAX_SIM_TIME_S = 120.0
+DEFAULT_MAX_STEPS = 400
+DEFAULT_MAX_SIM_TIME_S = 20.0
 
 
 def camera_closure(spec: dict, *, gpu_env: str = "TRACK2_RENDER_GPU"):

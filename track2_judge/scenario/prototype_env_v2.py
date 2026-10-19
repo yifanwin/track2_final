@@ -80,21 +80,28 @@ def main(output,events=True,instruction='move',non_target_drop=False):
         result=CandidateRunner(factory,isolated=True,timeout_s=30,max_steps=80,package_zip=package,
             supplemental_contracts={task['task_id']:{'predicates':[REGION,ON,ATTRIBUTE]}}).run(suite,output/'closure',{'text_instruction':instruction})
         if instruction=='move':
-            assert len(result['episodes'])==10 and all(e['status']=='failure' for e in result['episodes']),result
+            assert len(result['episodes'])==5 and all(e['status']=='failure' for e in result['episodes']),result
             evidence=json.loads((output/'closure/trusted_event_evidence.json').read_text());supp=json.loads((output/'closure/supplemental_verification.json').read_text())
             life=json.loads((output/'closure/skill_lifecycle.json').read_text());trace=json.loads((output/'closure/physical_trace.json').read_text())
             assert all(e['events'][0:2]==['ready','initialize'] and e['events'][-1]=='shutdown' for e in life)
             assert all(e['coverage']=='physics_substep' and e['frames']==e['expected_frames'] and e['frames']>0 for e in evidence)
             if events:assert all(e['event_counts']['collision']>=1 and e['event_counts']['forbidden_zone']>=1 for e in evidence)
             assert all(all(p['passed'] for p in e['predicates']) for e in supp),supp
-            assert all(e['P5']['passed'] for e in supp if e['mode']=='final')
-            score=json.loads((output/'closure/frozen_score_diagnostic.json').read_text());assert abs(score['tasks'][0]['SR_final']-(0 if non_target_drop else 2/3))<1e-12
-            assert v3.evaluate(suite,json.loads((output/'closure/runs.json').read_text()),output/'closure')==score
-            paired_runs=json.loads((output/'closure/runs.json').read_text())['runs'];initial_hashes=[]
-            for j in range(0,10,2):
-                a=(output/'closure'/paired_runs[j]['initial_layout']).read_bytes();b=(output/'closure'/paired_runs[j+1]['initial_layout']).read_bytes()
-                assert a==b;initial_hashes.append(hashlib.sha256(a).hexdigest())
-            assert len(set(initial_hashes))==5
+            # ★ 2026-10-18 取消 first/final：P5 是 `final` 的 recovery 诊断，
+            #   单模式下它**不再是判定项**（恒 `NOT CONFIGURED`）。
+            assert all(e['P5']['status']=='NOT CONFIGURED' for e in supp),supp[0].get('P5')
+            # ★ 2026-10-18：这条诊断走的是**冻结 V3 路径**（无 contract_extension），
+            #   而冻结评分器要求 first/final 配对 —— 单模式下它**显式不产分**。
+            #   断言这个显式行为（与 candidate_runner / functional 一致）。
+            import json as _json
+            diag=_json.loads((output/'closure/diagnosis.json').read_text())
+            assert diag.get('scoring_status')=='REFUSED: frozen paired scorer retired (single-mode)',diag.get('scoring_status')
+            assert not (output/'closure/extension_candidate_score.json').exists()
+            runs=_json.loads((output/'closure/runs.json').read_text())['runs'];initial_hashes=[]
+            for run in runs:
+                a=(output/'closure'/run['initial_layout']).read_bytes()
+                initial_hashes.append(hashlib.sha256(a).hexdigest())
+            assert len(initial_hashes)==5
             q0=trace[0]['physical']['qpos'];motion=max(abs(t['physical']['qpos'][0]-q0[0]) for t in trace);assert motion>.005
             if non_target_drop:
                 runs=json.loads((output/'closure/runs.json').read_text())['runs'];displacements=[]
@@ -103,9 +110,9 @@ def main(output,events=True,instruction='move',non_target_drop=False):
                     start_box=next(x for x in a['objects'] if x['instance']=='box2');end_box=next(x for x in b['objects'] if x['instance']=='box2')
                     d=abs(start_box['position'][2]-end_box['position'][2]);assert d>2;displacements.append(d)
             final={'status':'PASS','scope':'actual package -> Piper -> trusted substeps -> original Recorder/V3, synthetic goals',
-                'episodes':10,'distinct_paired_initial_states':5,'physics_frames':sum(e['frames'] for e in evidence),'joint_motion_rad':motion,'P1_P3_P4_P5':'supplemental PASS; NOT frozen scoring compatibility',
-                'events':[{'mode':e['mode'],'counts':e['event_counts'],'frames':e['frames']} for e in evidence],
-                'SR_final':score['tasks'][0]['SR_final'],'raw_diagnostic_score':score['score_100'],'official_score':None,'non_target_displacement_cm':displacements if non_target_drop else None,'policy':'candidate-event-policy-v2, intentionally forbidden support contact; official semantics pending','production_ready':False}
+                'episodes':5,'distinct_initial_states':5,'physics_frames':sum(e['frames'] for e in evidence),'joint_motion_rad':motion,'P1_P3_P4_P5':'supplemental PASS; NOT frozen scoring compatibility',
+                'events':[{'counts':e['event_counts'],'frames':e['frames']} for e in evidence],
+'official_score':None,'non_target_displacement_cm':displacements if non_target_drop else None,'policy':'candidate-event-policy-v2, intentionally forbidden support contact; official semantics pending','production_ready':False}
         else:
             assert result.get('scoring_status')=='REFUSED: missing trustworthy state'
             final={'status':'PASS','scope':'enabled constraints with no physics samples','scoring':'REFUSED; no invented zero events','production_ready':False}

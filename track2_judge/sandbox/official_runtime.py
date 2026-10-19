@@ -58,7 +58,7 @@ Q18 把这个问题的形状收窄了：**依赖由官方镜像提供，选手�
 它走的仍是既有的 JSON-lines 桥：
 
 ```text
-沙箱内 tools.joint_control(q, g)
+沙箱内 tools.joint_trajectory(targets)
   → 协议 stdout/stdin（package_host.py:ToolClient）
   → 评测器进程 toolapi/client.py:SandboxBridge
   → Gateway → 物理

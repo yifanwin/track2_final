@@ -10,6 +10,9 @@ from pathlib import Path
 
 MODEL=json.loads(Path(__file__).with_name('public_robot_kinematics.json').read_text())
 STATE={}
+#: 强制 Action Chunk（2026-10-18）：攒够 `CHUNK_SIZE` 步提交一次。
+#: 取 12（在 8–25 之间）—— 既留足抗超时余量，又不至于让盲区太长。
+CHUNK=[];CHUNK_SIZE=12
 def png_pixels(payload):
     blob=base64.b64decode(payload['data_base64']);offset=8;parts=[]
     while offset<len(blob):
@@ -130,6 +133,13 @@ def run(observation,tools):
             ('retreat',[grip[0]+.035,grip[1],grip[2]+.12],.1,120),
             ('stable',[grip[0]+.035,grip[1],grip[2]+.12],.1,40)]
     errors=[];last=None
+    # ★ 强制 Action Chunk（2026-10-18）：逐次 `piper_joint_control` 已不存在。
+    #   把每段插值结果**攒成 chunk**（8–25 步）再提交，语义与原来一致
+    #   （slew 逐步校验，轨迹相同），只是往返变少。
+    def _flush(buf):
+        if buf:
+            tools.joint_trajectory(list(buf))
+            buf.clear()
     for phase,target,opening,steps in points:
         path=[target] if last is None or phase in ('close','release','stable') else [[last[k]+(target[k]-last[k])*f/6 for k in range(3)] for f in range(1,7)]
         for point in path:
@@ -140,8 +150,12 @@ def run(observation,tools):
             for _ in range(max(18,steps//len(path))):
                 previous[:6]=[previous[i]+max(-.03,min(.03,wanted[i]-previous[i])) for i in range(6)]
                 previous[6]+=max(-.004,min(.004,opening-previous[6]))
-                obs=tools.piper_joint_control(list(previous[:6]),float(previous[6]))
+                CHUNK.append({'joint_position':list(previous[:6]),
+                              'gripper_opening_m':float(previous[6])})
+                if len(CHUNK)>=CHUNK_SIZE:
+                    _flush(CHUNK)
         last=list(target)
+    _flush(CHUNK)          # 收尾：不足 8 步时**不提交**（schema 会拒）
     STATE['done']=True
     return {'status':'completed','baseline':'public_goal_open_loop_prior','max_ik_residual':max(errors),'target_label':p['object']}
 

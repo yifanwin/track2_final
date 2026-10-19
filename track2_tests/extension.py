@@ -81,11 +81,13 @@ def main(output):
     test('C1_missing_evidence_refusal',missing_events)
     def checkpoints():
         m=OrderedCheckpoints([{'name':'one','predicates':[region]},{'name':'two','predicates':[region]}]);m.sample(state,1);assert not m.result()['passed'];m.sample(state,2);assert m.result()['passed'] and [x['physics_frame'] for x in m.result()['reached']]==[1,2]
+        # ★ 2026-10-18 取消 first/final：`verify` 不再有 `mode` 分支，P5（recovery）
+        #   **不再参与判定** —— 无论 checkpoint 是否通过都一律返回 `not_required`，
+        #   不会再抛 `ApprovalRequired`（那个「无效 recovery 需要批准」的边界已随 mode 一起删除）。
         t=copy.deepcopy(task);t['predicates'].append({'type':'P5','checkpoints':[{'name':'one','predicates':[region]}]})
-        try:engine.verify(t,old['initial_layout'],old['target_layout'],cfg,initial_state=state,final_state=state,event_evidence={'P5':{'passed':False}},mode='final')
-        except ApprovalRequired:pass
-        else:raise AssertionError('unapproved P5 scoring fabricated')
-        return 'P5 no standalone weight; ordered trusted samples; invalid recovery scoring edge requires approval'
+        r=engine.verify(t,old['initial_layout'],old['target_layout'],cfg,initial_state=state,final_state=state,event_evidence={'P5':{'passed':False}})
+        assert r['P5']['status']=='not_required' and r['P5']['passed'] is True,r['P5']
+        return 'P5 no standalone weight; ordered trusted samples; P5 excluded from judgement after first/final removal'
     test('P5_sequence_no_fabricated_score',checkpoints)
     def task_config():
         c={**cfg,'time_ref_s':45,'completion_threshold':.7};t={**task,'tier':'strict'}

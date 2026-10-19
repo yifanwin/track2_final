@@ -22,6 +22,13 @@ class BudgetTimeout(SkillTimeout):
 
 class SecurityNotReady(RuntimeError): pass
 
+class SkillError(RuntimeError):
+    """**选手包自己抛的异常**（F2 / 2026-10-18）。
+
+    与链路故障分开：它**不**阻断发布 —— 该 episode 按冻结的物理终态照常评分
+    （`skill_error` 可评分）。否则迁移期一个老包会让整批 case 全 BLOCKED。
+    """
+
 def encode(value): return json.dumps(plain(value),allow_nan=False,separators=(',',':'))+'\n'
 def decode(line):
     return json.loads(line,parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite JSON')))

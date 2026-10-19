@@ -31,9 +31,9 @@ out.mkdir(parents=True, mode=0o700, exist_ok=False)
 case_ids = check_casebank(CASEBANK)
 release_entry = Path(__file__).with_name('release_entry.py')
 
-# 本次预期每个 case 跑几条 episode 记录（= seed 数 × 2 个 mode）
+# 本次预期每个 case 跑几条 episode 记录（★ 2026-10-18：取消 first/final，= seed 数）
 seeds = ([int(s) for s in a.seeds.split(',') if s.strip()] if a.seeds else list(range(REPEATS_SIM)))
-expected_episodes = len(seeds) * 2
+expected_episodes = len(seeds)
 partial = len(seeds) != REPEATS_SIM
 
 results = []
@@ -70,7 +70,7 @@ for i, case_id in enumerate(case_ids):
     #   与 `resident_runner.SCORABLE` / `result_gate.SCORABLE_TERMINAL_STATUS` 同源；
     #   改一处必须改三处（见 plan/Track2_丢包自锁修复方案.md §0.4）。
     #   `infrastructure_timeout`（链路故障）**不在**其中 —— 它要判 FAIL。
-    SCORABLE_TERMINAL_STATUS = ('success', 'failure', 'budget_timeout')
+    SCORABLE_TERMINAL_STATUS = ('success', 'failure', 'budget_timeout', 'skill_error')
     concluded = (len(d.get('episodes', [])) == expected_episodes
                  and all(x.get('status') in SCORABLE_TERMINAL_STATUS
                          for x in d.get('episodes', [])))
@@ -79,7 +79,7 @@ for i, case_id in enumerate(case_ids):
     else:
         valid = (code == 0 and concluded
                  and gate.get('publishable') is True
-                 and d.get('scoring_status') == 'FROZEN_AUTHOR_PDF_RULES')
+                 and d.get('scoring_status') == 'CONTINUOUS_TERMINAL_STATE')
     # Q14：动作耗时（由 release_entry 从 runtime 节点的私有控制口取回，落在 case 目录里）
     timings = None
     timings_path = destination / 'timings.json'
@@ -97,7 +97,10 @@ for i, case_id in enumerate(case_ids):
     results.append({'ordinal': i, 'case_id': case_id,
                     'status': 'PASS' if valid else 'FAIL',
                     'episodes': len(d.get('episodes', [])),
-                    'frozen_rule_score_100': d.get('frozen_rule_score_100'),
+                    # ★ 2026-10-18：新分（终态连续评分，单 case 内部 100 分）。
+                    'score_100': d.get('extension_candidate_score_100'),
+                    # ⚠️ 旧分**已停用**（冻结件要求 first/final 配对），保留键只为兼容读端。
+                    'legacy_frozen_rule_score_100': d.get('frozen_rule_score_100'),
                     'scoring_status': d.get('scoring_status'),
                     'episodes_incomplete': incomplete,
                     'episodes_infrastructure_timeout': infra,
@@ -105,14 +108,17 @@ for i, case_id in enumerate(case_ids):
                     'action_max_s': ((timings or {}).get('quantiles') or {}).get('max')})
     print(json.dumps(results[-1]), flush=True)
     good = [x for x in results if x['status'] == 'PASS']
-    summary = {'status': 'PASS' if len(good) == 73 else 'RUNNING' if len(results) < 73 else 'FAIL',
-               'case_count': 73, 'completed_cases': len(results), 'pass_cases': len(good),
+    n_cases = len(case_ids)
+    summary = {'status': 'PASS' if len(good) == n_cases else 'RUNNING' if len(results) < n_cases else 'FAIL',
+               'case_count': n_cases, 'completed_cases': len(results), 'pass_cases': len(good),
                'fail_cases': len(results) - len(good), 'episodes': sum(x['episodes'] for x in results),
-               'frozen_rule_score_100': sum(x['frozen_rule_score_100'] for x in good) / 73 if len(good) == 73 else None,
+               # ★ 总分 = 各 case **等权平均**（每 case 满分 2 分 = 100/n_cases）。
+               'score_100': sum(x['score_100'] for x in good) / n_cases if len(good) == n_cases else None,
+               'score_per_case': round(100.0 / n_cases, 6) if n_cases else None,
                # ★ 口径如实标注 —— 1 seed 的产物**不是**正式成绩，别让它被误读
                'repeats': len(seeds), 'seeds': seeds,
                'scoring_status': ('DIAGNOSTIC_PARTIAL_SEEDS' if partial
-                                  else 'FROZEN_AUTHOR_PDF_RULES'),
+                                  else 'CONTINUOUS_TERMINAL_STATE'),
                'scoring_note': ('只跑 %d 个 seed（正式口径 %d）—— 冒烟，不构成成绩'
                                 % (len(seeds), REPEATS_SIM)) if partial else None,
                'strategy_scope': 'internal legal-action weak Skill; not difficulty calibration',

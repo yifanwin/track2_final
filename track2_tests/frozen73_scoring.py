@@ -14,7 +14,7 @@ t={**copy.deepcopy(old),'contract_schema':SCHEMA,'scoring_profile':PROFILE,'task
 checks={}
 for region_pass,pose_pass,completion,s in [(False,False,0,0),(True,False,.5,0),(False,True,.5,0),(True,True,1,1)]:
     state={'spatial_objects':{name:{'canonical_root_m':[0,0,0] if region_pass else [2,2,2]}}}
-    result=e.verify(t,old['initial_layout'],old['target_layout'] if pose_pass else old['initial_layout'],cfg,initial_state=state,final_state=state,event_evidence={'event_counts':{'collision':99999}},mode='final')
+    result=e.verify(t,old['initial_layout'],old['target_layout'] if pose_pass else old['initial_layout'],cfg,initial_state=state,final_state=state,event_evidence={'event_counts':{'collision':99999}})
     assert result['completion']==completion and result['s']==s and result['violation_count']==0
 checks['P1_P2_equal_weight_threshold']='PASS';checks['trajectory_events_not_scored']='PASS'
 for change in ('P3','weight','trajectory_C1','threshold','time_ref'):

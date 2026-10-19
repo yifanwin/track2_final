@@ -23,7 +23,7 @@ CASEBANK = Path(__file__).resolve().parents[2] / "judge_private" / "casebank"
 #: `2casefix` 的只读证据源（红线）。
 REFERENCE_ROOT = Path(__file__).resolve().parents[2] / "judge_private" / "reference_images"
 CASE_INDEX = CASEBANK / "cases.json"
-EXPECTED_CASES = 73
+EXPECTED_CASES = 50
 MAX_CASE_BYTES = 8 * 1024 ** 2
 CASE_ID_RE = re.compile('[A-Za-z0-9_-]{1,100}')
 

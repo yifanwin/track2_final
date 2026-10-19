@@ -33,13 +33,11 @@ class TrustedRecorder:
         *,
         task_index: int,
         task: dict[str, Any],
-        mode: str,
         seed: int,
         environment: str,
         initial_layout: dict[str, Any],
         final_layout: dict[str, Any],
         elapsed_s: float,
-        plan_revisions: int,
         event_violations: dict[str, int],
         verification: dict[str, Any],
         tool_calls: list[dict[str, Any]],
@@ -47,7 +45,7 @@ class TrustedRecorder:
         error: str | None = None,
     ) -> dict[str, Any]:
         task_key = "".join(char if char.isalnum() else "_" for char in task["task_id"]).strip("_")[:80]
-        stem = f"{task_index:03d}_{task_key}_{mode}_seed{seed}"
+        stem = f"{task_index:03d}_{task_key}_seed{seed}"
         initial_path = self.states_dir / f"{stem}_initial.json"
         final_path = self.states_dir / f"{stem}_final.json"
         write_json(initial_path, initial_layout)
@@ -55,13 +53,11 @@ class TrustedRecorder:
         run = {
             "run_id": stem,
             "task_id": task["task_id"],
-            "mode": mode,
             "seed": int(seed),
             "environment": environment,
             "initial_layout": initial_path.relative_to(self.runs_dir).as_posix(),
             "final_layout": final_path.relative_to(self.runs_dir).as_posix(),
             "elapsed_s": float(elapsed_s),
-            "plan_revisions": int(plan_revisions),
             "event_violations": {key: int(value) for key, value in event_violations.items()},
         }
         self.runs.append(run)
@@ -75,7 +71,6 @@ class TrustedRecorder:
                 "suite_hash": self.suite_hash,
                 "task_contract_hash": canonical_json_hash(task),
                 "task_id": task["task_id"],
-                "mode": mode,
                 "seed": int(seed),
                 "environment": environment,
                 "status": status,
@@ -110,8 +105,6 @@ class TrustedRecorder:
                 "simulator_version": SIMULATOR_VERSION,
                 "suite": str(Path(suite_path).resolve()),
                 "run_count": len(self.runs),
-                "first_count": sum(1 for run in self.runs if run["mode"] == "first"),
-                "final_count": sum(1 for run in self.runs if run["mode"] == "final"),
                 "skill_hash": self.skill_hash,
                 "suite_hash": self.suite_hash,
             },

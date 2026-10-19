@@ -120,8 +120,8 @@ class ActionRecord:
     __slots__ = (
         "invocation_id", "attempt_id", "tool_id", "arguments", "caller_id", "task_id",
         "phase", "cancel_status", "cancel_requested_at_s", "execution_status",
-        "outcome", "result", "error", "admitted_at_s", "started_at_s", "finished_at_s",
-        "cancel_effective", "timed_out",
+        "outcome", "result", "error", "error_code", "admitted_at_s", "started_at_s",
+        "finished_at_s", "cancel_effective", "timed_out",
     )
 
     def __init__(self, tool_id: str, arguments: dict, caller_id: str | None,
@@ -139,6 +139,7 @@ class ActionRecord:
         self.outcome: str | None = None
         self.result: dict | None = None
         self.error: str | None = None
+        self.error_code: str | None = None
         self.admitted_at_s = now
         self.started_at_s: float | None = None
         self.finished_at_s: float | None = None
@@ -164,6 +165,8 @@ class ActionRecord:
             payload["timed_out"] = True
         if self.error is not None:
             payload["error"] = self.error
+        if getattr(self, "error_code", None):
+            payload["error_code"] = self.error_code
         return payload
 
     def result_envelope(self) -> tuple[int, dict[str, Any]]:
@@ -186,6 +189,9 @@ class ActionRecord:
         if self.error is not None:
             body["data"]["error"] = self.error
             body["error"] = {"message": self.error}
+            if getattr(self, "error_code", None):
+                body["error"]["code"] = self.error_code
+                body["data"]["error_code"] = self.error_code
         return 200, body
 
 
@@ -364,8 +370,23 @@ class LocalGateway:
 
             # 拿锁 = 独占 adapter。拿不到就说明有别的东西在跑（例如一次 Query）。
             with self._adapter_lock:
-                if record.tool_id == "track2.robot.joint_control":
-                    raw = self._executor.step(record.arguments)
+                if record.tool_id == "track2.robot.joint_trajectory":
+                    # ★ 强制 Action Chunk：整段预校验 + 逐步执行（本地 adapter）。
+                    targets = record.arguments["targets"]
+                    previous = self._executor._adapter.current_command_target()
+                    for item in targets:
+                        q, g = self._executor._adapter.assert_within_slew(
+                            previous, item["joint_position"], item["gripper_opening_m"])
+                        previous = [*q.tolist(), float(g)]
+                    self._executor._adapter.assert_budget_allows(len(targets))
+                    executed = 0
+                    for item in targets:
+                        self._executor.step({"joint_position": list(item["joint_position"]),
+                                             "gripper_opening_m": float(item["gripper_opening_m"])})
+                        executed += 1
+                    raw = {"control_steps": executed,
+                           "sim_time_s": executed * self._executor._adapter.control_timestep,
+                           "executed_steps": executed}
                 elif record.tool_id == "track2.robot.gripper_control":
                     raw = self._executor.gripper_step(record.arguments)
                 else:
@@ -381,7 +402,11 @@ class LocalGateway:
                 record.finished_at_s = self._clock()
         except Exception as exc:
             with self._state_lock:
-                record.error = f"{type(exc).__name__}"
+                # ★ F1：带上**真实消息**（不只是类型名），否则
+                #   「control budget exhausted」在客户端分不出来。
+                record.error = f"{type(exc).__name__}: {str(exc)[:200]}"
+                record.error_code = ("TRACK2_CONTROL_BUDGET_EXHAUSTED"
+                                     if "control budget exhausted" in str(exc) else None)
                 record.outcome = OUTCOME_FAILED
                 record.phase = PHASE_TERMINAL
                 record.execution_status = EXEC_STOPPED_CONFIRMED

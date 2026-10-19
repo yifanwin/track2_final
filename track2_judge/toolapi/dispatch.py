@@ -120,20 +120,55 @@ class ManiSkillSimulatorAdapter:
         result['robot']['joint_limits_rad']=array(self.__env.agent.robot.get_qlimits()).reshape(-1,2)[:6].tolist()
         if self.__observation_provider is not None:result.update(self.__observation_provider.observation())
         return result
-    def step(self,action):
+    # ── 只读件（chunk 的预校验复用它们，避免两份逻辑漂移）
+    #
+    # ★ 2026-10-18 强制 Action Chunk：chunk 必须在**推进任何物理之前**整条校验，
+    #   否则会「前半段动了、后半段越限」→ 半途撞预算/越限 → BLOCKED（见 F1）。
+    #   所以把 `step()` 里的四个判据抽出来，`step()` 与 chunk 都用同一份。
+
+    @property
+    def control_timestep(self):
         self.__require()
-        if not isinstance(action,dict) or set(action)!={'joint_position','gripper_opening_m'}:raise ValueError('only robot joint targets accepted')
-        raw=action['joint_position']; opening=action['gripper_opening_m']
+        return float(self.__env.control_timestep)
+
+    def current_command_target(self):
+        """当前命令目标（上一帧下发值），形如 6 关节 + 夹爪开度。"""
+        self.__require()
+        return None if self.__previous is None else list(self.__previous)
+
+    def assert_within_limits(self,raw,opening):
+        """限位 + 形状 + 有限性。不通过抛 `ValueError`。"""
+        self.__require()
         if not isinstance(raw,(list,tuple,np.ndarray)) or np.ndim(raw)!=1 or any(not isinstance(x,Real) or isinstance(x,(bool,np.bool_)) for x in raw) or not isinstance(opening,Real) or isinstance(opening,(bool,np.bool_)):raise ValueError('numeric values required')
         try:q=np.asarray(raw,dtype=float);g=float(opening)
         except (ValueError,TypeError):raise ValueError('numeric values required') from None
         if q.shape!=(6,) or not np.isfinite(q).all() or not np.isfinite(g):raise ValueError('dimension or finite check failed')
         lim=array(self.__env.agent.robot.get_qlimits()).reshape(-1,2)[:6]
         if np.any(q<lim[:,0]) or np.any(q>lim[:,1]) or not 0<=g<=.1:raise ValueError('outside Piper limits')
+        return q,g
+
+    def assert_within_slew(self,previous,raw,opening):
+        """步间限幅。`previous` 为 7 维（6 关节 + 夹爪），来自 `current_command_target()`。"""
+        q,g=self.assert_within_limits(raw,opening)
+        if previous is None:return q,g
         target=np.r_[q,g];dt=float(self.__env.control_timestep)
         # Conservative internal command slew budget, below URDF 5 rad/s, 3m/s.
-        if np.any(np.abs(target-self.__previous)>np.r_[[1.]*6,.12]*dt+1e-7):raise ValueError('target slew exceeded')
-        if self.__steps>=self.__max_steps or (self.__steps+1)*dt>self.__max_time+1e-9:raise RuntimeError('control budget exhausted')
+        if np.any(np.abs(target-np.asarray(previous,dtype=float))>np.r_[[1.]*6,.12]*dt+1e-7):raise ValueError('target slew exceeded')
+        return q,g
+
+    def assert_budget_allows(self,count=1):
+        """剩余预算是否容得下 `count` 步。容不下抛 `RuntimeError('control budget exhausted')`。"""
+        self.__require()
+        dt=float(self.__env.control_timestep)
+        if self.__steps+count>self.__max_steps or (self.__steps+count)*dt>self.__max_time+1e-9:raise RuntimeError('control budget exhausted')
+
+    def step(self,action):
+        self.__require()
+        if not isinstance(action,dict) or set(action)!={'joint_position','gripper_opening_m'}:raise ValueError('only robot joint targets accepted')
+        raw=action['joint_position']; opening=action['gripper_opening_m']
+        q,g=self.assert_within_slew(self.__previous,raw,opening)
+        self.assert_budget_allows(1)
+        target=np.r_[q,g]
         expected=int(getattr(self.__env,'_sim_steps_per_control',0))
         self.__expected_frames+=expected
         # health 的应有采样数按**同一个节流**算（2026-10-18）。
@@ -183,6 +218,19 @@ class ManiSkillSimulatorAdapter:
         if method=='observe' and payload is None:return self.observe()
         if method=='step':return self.step(payload)
         if method=='piper_joint_control':return self.step(payload)
+        # ★ 2026-10-18 强制 Action Chunk：本地 adapter 也认 `joint_trajectory`
+        #   （`payload={'targets':[...]}`）。它与 gateway 侧走同一条语义：
+        #   整段先校验、整段执行。旧名 `joint_control` **不再接受**。
+        if method=='joint_trajectory':
+            targets=(payload or {}).get('targets')
+            if not isinstance(targets,list):raise ValueError('joint_trajectory requires targets list')
+            executed=0
+            for item in targets:
+                self.step({'joint_position':item['joint_position'],
+                           'gripper_opening_m':item['gripper_opening_m']})
+                executed+=1
+            return {'control_steps':executed,
+                    'simulation_time_s':executed*float(self.__env.control_timestep)}
         if method=='piper_gripper_control':
             if not isinstance(payload,dict) or set(payload)!={'gripper_opening_m'}:raise ValueError('gripper schema rejected')
             return self.step({'joint_position':self.__previous[:6].tolist(),'gripper_opening_m':payload['gripper_opening_m']})

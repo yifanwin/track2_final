@@ -36,7 +36,7 @@ episode，`final` 还要追加执行 —— 每 episode 起一次 flow 光启动
 | `GET /episode/snapshot` | Judge ← runtime | **只有 Judge**（选手沙箱无网络，见 B5） |
 | `[track2-player] 结束：{...}` | 从**日志**里读 | 这是裁判自己的日志，选手看不到 |
 
-选手侧只有一条路：gateway 的三个 Tool（`observe` / `joint_control` /
+选手侧只有一条路：gateway 的三个 Tool（`observe` / `joint_trajectory` /
 `gripper_control`）。
 """
 from __future__ import annotations
@@ -412,15 +412,15 @@ class PersistentFlow:
     def health(self) -> dict:
         return self._get(self.control_url + "/health", timeout=5.0)
 
-    def reset(self, case_id: str, seed: int, mode: str = "final") -> dict:
+    def reset(self, case_id: str, seed: int) -> dict:
         """下发一个 episode。**只有 Judge 能调**（见模块说明）。
 
         ⚠️ 这个调用会**阻塞到场景重建完**（2.7 s）—— `endpoints.reset_episode`
         走的是单线程物理 executor，而它和 Tool 调用排同一条队列，
-        所以 reset 不会与选手的 `joint_control` 撞在一起（Q9）。
+        所以 reset 不会与选手的 `joint_trajectory` 撞在一起（Q9）。
         """
         return self._post("/episode/reset",
-                          {"case_id": case_id, "seed": seed, "mode": mode})
+                          {"case_id": case_id, "seed": seed})
 
     def snapshot(self) -> dict:
         """judge-only 真值（B2）。**不含**任何进 gateway 的字段。"""
@@ -487,26 +487,8 @@ class PersistentFlow:
             time.sleep(poll_s)
         raise FlowError(f"等 episode 结果超时（{timeout_s} s）：{self.results_path}")
 
-    def next_attempt(self) -> dict:
-        """同一 episode 内追加一次 Skill 执行（**不 reset**）。
-
-        边界决策 §1.2 的 `final`：
-
-        ```text
-        final:
-            从同一个 S0 reset
-            调 run() 最多 3 次
-              第 1 次失败：不 reset，再调 run()
-              第 2 次失败：不 reset，再调 run()
-        ```
-
-        ⚠️ **调用方必须先看过第 1 次的判定**再决定要不要追加 ——
-        中间那次 verify 属于裁判（这就是「循环归 Judge」的字面意思）。
-        """
-        return self._post("/episode/next_attempt", {})
-
-    def attempt_episode(self, case_id: str, seed: int, mode: str = "final", *,
-                        max_attempts: int = 3,
+    def attempt_episode(self, case_id: str, seed: int, *,
+                        max_attempts: int = 1,
                         verdict=None,
                         timeout_s: float = 1200.0) -> dict:
         """下发一个 episode，按 `mode` 跑 1 次或最多 `max_attempts` 次。
@@ -526,12 +508,11 @@ class PersistentFlow:
         `plan_revisions = attempts - 1`（与 `candidate_runner.py` 一致）。
         """
         self.drain_results()
-        record = self.reset(case_id, seed, mode)
+        record = self.reset(case_id, seed)
         rounds = []
-        limit = max_attempts if mode == "final" else 1
-        for attempt in range(1, limit + 1):
-            if attempt > 1:
-                self.next_attempt()
+        # ★ 2026-10-18 取消 first/final：**不再有**「失败后追加执行」。
+        #   `max_attempts` 恒为 1（保留参数只为调用方签名兼容）。
+        for attempt in range(1, max_attempts + 1):
             played = self.wait_episode(timeout_s=timeout_s)
             snapshot = self.snapshot()
             snapshot = {**snapshot, "player": played.get("result"),
@@ -558,7 +539,7 @@ class PersistentFlow:
                 "player_summary": rounds[-1]["played"],
                 "snapshot": rounds[-1]["snapshot"]}
 
-    def run_episode(self, case_id: str, seed: int, mode: str = "final", *,
+    def run_episode(self, case_id: str, seed: int, *,
                     timeout_s: float = 1200.0) -> dict:
         """下发一个 episode 并**等它真的跑完**，返回 judge 侧需要的三样。
 
@@ -570,7 +551,7 @@ class PersistentFlow:
         只跑 1 次 `run()`（= 边界决策里的 `first`）。要跑 `final` 的多轮
         用 `attempt_episode()`。
         """
-        return self.attempt_episode(case_id, seed, mode, max_attempts=1,
+        return self.attempt_episode(case_id, seed, max_attempts=1,
                                     timeout_s=timeout_s)
 
     @property

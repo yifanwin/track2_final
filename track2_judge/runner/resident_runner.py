@@ -86,7 +86,7 @@ def _player_terminal_status(summary) -> str:
 
 
 class ResidentRunner:
-    """一次 `case × 5 seed × 2 mode` 的评测：起**一次** flow，跑完所有 episode。"""
+    """一次 `case × 5 seed` 的评测：起**一次** flow，跑完所有 episode。"""
 
     def __init__(self, *, case_id, casebank, reference_root, bundle_root,
                  physics_root, python, skill_zip, output,
@@ -122,6 +122,8 @@ class ResidentRunner:
             raise ResidentRunError(f"case not found: {self.case_id}")
         self.bundle = json.loads(bundle_path.read_text(encoding="utf8"))
         self.task = self.bundle["contract"]
+        #: 静止件（桌面等）—— **不算非目标物体**（终态连续评分的保持项口径）。
+        self.static_objects = tuple(self.bundle.get("static_objects") or ())
         self.engine.validate_task(self.task)
         self._task_config = self.engine.config_for_task(self.task, self.config)
 
@@ -165,9 +167,9 @@ class ResidentRunner:
             oracle_planning=self.oracle_planning)
         try:
             flow.start()
+            # ★ 2026-10-18 取消 first/final：每 seed **1** 次（单 case = 5 episode）。
             for seed in self.seeds:
-                for mode in ("first", "final"):
-                    record = self._run_one(flow, recorder, seed, mode,
+                    record = self._run_one(flow, recorder, seed,
                                            runs_log, health_reports,
                                            event_reports, lifecycles, trace)
                     print(json.dumps({k: v for k, v in record.items()
@@ -218,12 +220,12 @@ class ResidentRunner:
                                  "always fails on error/timeout."),
             "execution_chain": "PAOS persistent flow (resident_runner)",
         }
-        expected = len(self.seeds) * 2
+        expected = len(self.seeds)
         complete_repeats = len(self.seeds) == int(self.config["repeats"])
-        # ★ 2026-10-18：**三个可评分终态** —— success / failure / budget_timeout。
+        # ★ 2026-10-18：**四种可评分终态** —— success / failure / budget_timeout / skill_error。
         #   `budget_timeout` 的物理终态是有效的（判据见 `_run_one`），照常评分；
         #   `infrastructure_timeout`（链路故障）**不**在内，它会走门禁阻断。
-        SCORABLE = ("success", "failure", "budget_timeout")
+        SCORABLE = ("success", "failure", "budget_timeout", "skill_error")
         # ① 兜底：任一 episode 的 provider 侧动作账本不完整 → 不算有效。
         #   它与上面那两个条件**独立** —— 专抓「选手吞异常、status 看着正常」
         #   那一类（加速方案的异常分类够不着，见 §3.1）。
@@ -257,14 +259,15 @@ class ResidentRunner:
                 _write_json(output / score_name, report)
                 replay_ok = True
                 diagnosis["extension_candidate_score_100"] = report["candidate_score_100"]
-                if report.get("contract_status") == "FROZEN_AUTHOR_PDF_RULES":
-                    diagnosis.update(
-                        scoring_status="FROZEN_AUTHOR_PDF_RULES",
-                        frozen_rule_score_100=report["frozen_rule_score_100"],
-                        candidate_status=(
-                            "EVALUATION_COMPLETED"
-                            if all(r["status"] in SCORABLE for r in runs_log)
-                            else "EXECUTION_FAILURE"))
+                # ★ 2026-10-18：新分已产出（`extension_candidate_score_100`）——
+                #   这就是正式分。标 `CONTINUOUS_TERMINAL_STATE`（旧词
+                #   `FROZEN_AUTHOR_PDF_RULES` 对应的是已停用的冻结讲解算，见 §3.6）。
+                diagnosis.update(
+                    scoring_status="CONTINUOUS_TERMINAL_STATE",
+                    candidate_status=(
+                        "EVALUATION_COMPLETED"
+                        if all(r["status"] in SCORABLE for r in runs_log)
+                        else "EXECUTION_FAILURE"))
             except Exception as replay_error:                   # noqa: BLE001
                 diagnosis.update(
                     scoring_status="REFUSED: verifier/scorer replay failed",
@@ -290,27 +293,22 @@ class ResidentRunner:
 
     # ── 一个 episode
 
-    def _run_one(self, flow, recorder, seed, mode, runs_log, health_reports,
+    def _run_one(self, flow, recorder, seed, runs_log, health_reports,
                  event_reports, lifecycles, trace) -> dict:
         started = time.monotonic()
         initial_seen: dict = {}
 
         def verdict(attempt, snapshot):
-            """**裁判的判定** —— 决定 `final` 要不要再给一次机会。
-
-            这里**只**判「成功了吗」，不改任何状态；`final` 的第 2/3 次由
-            `attempt_episode()` 在**不 reset** 的前提下追加。
-            """
-            result = self._verify(snapshot, mode)
+            """**裁判的判定** —— 已不再用于追加执行（单模式），保留签名兼容。"""
+            result = self._verify(snapshot)
             initial_seen.setdefault("value", snapshot.get("initial_layout"))
             if attempt == 1:
-                event_reports.append({"task_index": 0, "mode": mode, "seed": seed,
+                event_reports.append({"task_index": 0, "seed": seed,
                                       **self._event_block(snapshot)})
             return bool(result["success"])
 
-        out = flow.attempt_episode(self.case_id, seed, mode,
-                                   max_attempts=3 if mode == "final" else 1,
-                                   verdict=verdict)
+        # ★ 单模式：每 seed 只调 `run()` **1** 次（不再有 final 的追加执行）。
+        out = flow.attempt_episode(self.case_id, seed, max_attempts=1)
         snapshot = out["snapshot"]
         elapsed = max(time.monotonic() - started, 1e-6)
 
@@ -341,7 +339,7 @@ class ResidentRunner:
 
         # ★ 判定用**最终那一轮的快照**（`final` 的中间轮次不留存 —— 原实现
         #   `capture()` 也是最后一个 attempt 覆盖前者，语义一致）。
-        verification = self._verify(snapshot, mode)
+        verification = self._verify(snapshot)
         status = "success" if verification["success"] else "failure"
 
         # ★ 2026-10-18：选手侧终态分类（见 `sandbox/rpc.py` 的 `BudgetTimeout`）。
@@ -356,7 +354,10 @@ class ResidentRunner:
         player_status = _player_terminal_status(out["player_summary"])
         if player_status == "budget_timeout":
             status = "budget_timeout"
-        elif player_status in ("infrastructure_timeout", "timeout", "error",
+        elif player_status == "skill_error":
+            # ★ F2：选手包自己抛异常 —— **可评分**（按冻结终态照常判分）。
+            status = "skill_error"
+        elif player_status in ("infrastructure_timeout", "timeout",
                                "security_not_ready"):
             status = "infrastructure_timeout"
 
@@ -367,20 +368,21 @@ class ResidentRunner:
                 "snapshot 缺少 initial_layout/layout —— runtime 侧没采到初态")
 
         # 复算一次 `capture` + `bind` 的等价物（`extension.evaluate` 会逐字段重放比对）
-        self.engine.capture(self.task, mode, seed,
+        self.engine.capture(self.task, seed,
                             snapshot.get("initial_physical"),
                             snapshot.get("physical"), verification,
                             self._task_config, self._event_block(snapshot),
-                            initial_layout, final_layout)
+                            initial_layout, final_layout,
+                            static_objects=self.static_objects)
         for attempt_entry in out["rounds"]:
-            trace.append({"task_index": 0, "seed": seed, "mode": mode,
+            trace.append({"task_index": 0, "seed": seed,
                           "attempt": attempt_entry["attempt"],
                           "physical": (attempt_entry["snapshot"] or {}).get("physical")})
 
         recorded = recorder.record(
-            task_index=0, task=self.task, mode=mode, seed=seed, environment="sim",
+            task_index=0, task=self.task, seed=seed, environment="sim",
             initial_layout=initial_layout, final_layout=final_layout,
-            elapsed_s=elapsed, plan_revisions=int(out["plan_revisions"]),
+            elapsed_s=elapsed,
             event_violations=self._event_block(snapshot).get("event_counts", {}),
             verification=verification,
             # ⚠️ `tool_calls` **不来自选手** —— 它是「裁判看到的调用账本」。
@@ -390,35 +392,34 @@ class ResidentRunner:
             tool_calls=[{"note": "tool call ledger lives in the PAOS gateway; "
                                  "not mirrored here (resident chain)"}],
             status=status)
-        self.engine.bind_recorded_run(self.task, mode, seed, recorded)
+        self.engine.bind_recorded_run(self.task, seed, recorded)
 
-        health_reports.append({"task_index": 0, "mode": mode, "seed": seed,
+        health_reports.append({"task_index": 0, "seed": seed,
                                "summary": snapshot.get("physics_health"),
                                "private_evidence": None,
                                "private_evidence_sha256": None,
                                "note": "substep ring buffer lives in the PAOS runtime"})
-        lifecycles.append({"seed": seed, "mode": mode,
+        lifecycles.append({"seed": seed,
                            "events": ((out["player_summary"] or {}).get("result") or {})
                                      .get("lifecycle")})
-        runs_log.append({"seed": seed, "mode": mode, "status": status,
+        runs_log.append({"seed": seed, "status": status,
                          "player_status": player_status,
                          # ① 兜底判据：`INCOMPLETE` = provider 侧有「有 start
                          # 无 finish」的动作（与选手是否吞异常无关）
                          "execution_integrity": execution_integrity,
                          "attempts": int(out["attempts"]),
-                         "plan_revisions": int(out["plan_revisions"]),
                          "error_category": player_status
                          if status not in ("success", "failure") else None,
                          "skill_active_wall_s": elapsed,
                          "total_wall_s": elapsed,
-                         "success_scope": "FROZEN_AUTHOR_PDF_RULES"
+                         "success_scope": "CONTINUOUS_TERMINAL_STATE"
                          if "scoring_profile" in self.task
                          else "TRUSTED_DIAGNOSTIC_EXTENSION"})
         return runs_log[-1]
 
     # ── 判定 / 证据
 
-    def _verify(self, snapshot, mode) -> dict:
+    def _verify(self, snapshot) -> dict:
         initial = snapshot.get("initial_layout")
         final = snapshot.get("layout")
         if initial is None or final is None:
@@ -428,7 +429,8 @@ class ResidentRunner:
                 self.task, initial, final, self.config,
                 event_evidence=self._event_block(snapshot),
                 initial_state=snapshot.get("initial_physical"),
-                final_state=snapshot.get("physical"), mode=mode)
+                final_state=snapshot.get("physical"),
+                static_objects=self.static_objects)
         except Exception as exc:                                # noqa: BLE001
             # 判定抛错 = 这一次评测不可信。**如实记成 failure 并带上原因**，
             # 不要吞掉（吞掉的后果是「用上一次的结论」这种静默错分）。

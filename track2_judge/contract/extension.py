@@ -58,7 +58,7 @@ class TrustedContractExtension:
         if 'scoring_profile' in task and cfg!=v3.default_config('sim',task['tier']):raise ValueError('frozen 73 scoring parameters cannot be overridden')
         return cfg
     def event_constraints(self,task,config):return sorted({c['kind'] for c in task.get('constraints',[]) if c['kind'] in v3.EVENTS})
-    def verify(self,task,initial,final,config,event_evidence=None,*,initial_state=None,final_state=None,mode='first'):
+    def verify(self,task,initial,final,config,event_evidence=None,*,initial_state=None,final_state=None,static_objects=()):
         self.validate_task(task);config=self.config_for_task(task,config)
         if initial_state is None or final_state is None:raise ValueError('judge physical states required')
         # Caller is the judge Runner; these never originate from a Skill packet.
@@ -94,52 +94,91 @@ class TrustedContractExtension:
                 count=event_evidence['event_counts'][c['kind']]
                 if type(count)!=int or count<0:raise ValueError('invalid trusted event count')
             violations+=count;constraint_details.append({'kind':c['kind'],'violation_count':count})
-        checkpoints=[p for p in task['predicates'] if p['type']=='P5'];p5={'status':'not_required','passed':True}
-        if checkpoints and mode=='final':
-            p5=(event_evidence or {}).get('P5',{'status':'inconclusive','passed':False})
-            # The PDF excludes standalone P5 points but does not specify how a
-            # failed recovery checkpoint changes partial completion. Fail closed
-            # on final scoring until this edge policy receives explicit approval.
-            if p5.get('passed') is not True:raise ApprovalRequired('P5 recovery invalid: final partial-score mapping needs approval')
-        strict=all(r['passed'] for r in results) and violations==0 and p5['passed']
+        # ★ 2026-10-18 连续评分：非目标物体的**逐项**位移（算 30 分的保持项）。
+        #
+        #   口径（`plan/Track2_终态连续评分_改造方案.md` §1.4）：
+        #   * 目标物体（P1/P2 的对象）**不算**
+        #   * `case.json` 的 `static_objects`（桌面等）**一律不算**
+        #   * 其余可移动物体**逐项**给 `(d_pos_cm, d_rot_deg)`，`v_j = 1/M` 均分
+        #   * `M = 0` ⇒ 满分（无物可碰 = 完美保持）
+        #
+        #   几何量**复用冻结件**（`v3.object_map` / `v3.rotation_error_deg`），
+        #   不复制几何代码、也不改冻结件（§3.3 选 C）。
+        goal=task.get('target_layout',initial)
+        start_map=v3.object_map(initial,goal);end_map=v3.object_map(final,goal)
+        static=set(static_objects or ())
+        preserve=[]
+        for key in sorted(set(start_map)-selected-static):
+            if key not in end_map:continue          # 终态缺该物体：不算位移（缺失另有 C1 记）
+            dpos=math.dist(start_map[key]['position'],end_map[key]['position'])
+            drot=v3.rotation_error_deg(start_map[key]['rotation'],end_map[key]['rotation'])
+            preserve.append((float(dpos),float(drot)))
+        p5={'status':'not_required','passed':True}
+        strict=all(r['passed'] for r in results) and violations==0
+        # ★ 2026-10-18 终态连续评分（新分；旧分 `s` 保留为 legacy diagnostic）。
+        #   `P1` 是硬门（§3.5 红线：它仍在 `predicates[]` 里，Gate 照常检查）。
+        from track2_judge.scoring.judge_scorer import score_case, constants_for_tier
+        p1=[r for r in results if r['type']=='P1']
+        p2r=[r for r in results if r['type']=='P2']
+        p1_passed=bool(p1 and p1[0]['passed'])
+        d_pos=float(p2r[0]['position_error_cm']) if p2r and 'position_error_cm' in p2r[0] else 0.0
+        d_rot=float(p2r[0]['rotation_error_deg']) if p2r and 'rotation_error_deg' in p2r[0] else 0.0
+        continuous=score_case(
+            targets=[{'p1_passed':p1_passed,'weight':1.0,'d_pos_cm':d_pos,'d_rot_deg':d_rot}],
+            displacements=preserve,
+            constants=constants_for_tier(task['tier']))
         return {'completion':completion,'s':score,'strict_success':strict,'success':strict,'status':'success' if strict else 'inconclusive' if any(r['status']=='inconclusive' for r in results) else 'failure',
-                'predicates':results,'violation_count':violations,'constraints':constraint_details,'P5':p5,'scoring_engine':'trusted candidate extension + unchanged V3 summarize','official_score':None}
-    def capture(self,task,mode,seed,initial_state,final_state,result,config,event_evidence,initial_layout,final_layout):
-        self.packets[(task['task_id'],mode,seed)]={'task_sha256':digest(task),'config':self.config_for_task(task,config),'result':copy.deepcopy(result),
+                'predicates':results,'violation_count':violations,'constraints':constraint_details,'P5':p5,
+                'preserve_displacements':preserve,
+                'score_target':continuous['score_target'],'score_preserve':continuous['score_preserve'],
+                'score_100':continuous['score_100'],
+                'scoring_engine':'trusted candidate extension + continuous terminal-state scorer','official_score':None}
+    def capture(self,task,seed,initial_state,final_state,result,config,event_evidence,initial_layout,final_layout,static_objects=()):
+        self.packets[(task['task_id'],seed)]={'task_sha256':digest(task),'config':self.config_for_task(task,config),'result':copy.deepcopy(result),'static_objects':tuple(static_objects or ()),
             'event_evidence':copy.deepcopy(event_evidence),'event_evidence_sha256':digest(event_evidence),'initial_layout_sha256':digest(initial_layout),'final_layout_sha256':digest(final_layout),'initial_state_sha256':digest(initial_state),'final_state_sha256':digest(final_state),'initial_state':copy.deepcopy(initial_state),'final_state':copy.deepcopy(final_state)}
-    def bind_recorded_run(self,task,mode,seed,run):
-        self.packets[(task['task_id'],mode,seed)]['recorded_run_sha256']=digest(run)
+    def bind_recorded_run(self,task,seed,run):
+        self.packets[(task['task_id'],seed)]['recorded_run_sha256']=digest(run)
     def evaluate(self,suite,submission,base_dir):
         runs=submission['runs'];tasks=suite['tasks'];R=suite['config']['repeats']
-        if len(runs)!=len(tasks)*R*2:raise ValueError('full paired repeats required')
+        # ★ 2026-10-18 取消 first/final：每 seed **1** 次（不再是 `*2`）。
+        if len(runs)!=len(tasks)*R:raise ValueError('full repeats required')
         seen=set();per_task=[]
         for task in tasks:
-            groups={'first':{},'final':{}};initial={}
+            by_seed={}
             for run in [r for r in runs if r['task_id']==task['task_id']]:
-                key=(task['task_id'],run['mode'],run['seed'])
+                key=(task['task_id'],run['seed'])
                 if key in seen:raise ValueError('duplicate trial')
                 seen.add(key);packet=self.packets[key]
-                if digest(run)!=packet.get('recorded_run_sha256'):raise ValueError('run timing/replan/evidence record tamper detected')
+                if digest(run)!=packet.get('recorded_run_sha256'):raise ValueError('run timing/evidence record tamper detected')
                 if packet['task_sha256']!=digest(task):raise ValueError('contract changed after execution')
                 initial_layout=v3.read_json(Path(base_dir)/run['initial_layout']);final_layout=v3.read_json(Path(base_dir)/run['final_layout'])
                 if digest(initial_layout)!=packet['initial_layout_sha256'] or digest(final_layout)!=packet['final_layout_sha256']:raise ValueError('recorded state tamper detected')
                 if digest(packet['initial_state'])!=packet['initial_state_sha256'] or digest(packet['final_state'])!=packet['final_state_sha256'] or digest(packet['event_evidence'])!=packet['event_evidence_sha256']:raise ValueError('private evidence integrity rejected')
-                verified=self.verify(task,initial_layout,final_layout,packet['config'],event_evidence=packet['event_evidence'],initial_state=packet['initial_state'],final_state=packet['final_state'],mode=run['mode'])
+                # ★ 必须传**同一套** static_objects —— 否则保持项的位移列表
+                #   与 capture 时不一致 → digest 失配（'independent predicate replay mismatch'）。
+                verified=self.verify(task,initial_layout,final_layout,packet['config'],event_evidence=packet['event_evidence'],initial_state=packet['initial_state'],final_state=packet['final_state'],static_objects=packet.get('static_objects',()))
                 if digest(verified)!=digest(packet['result']):raise ValueError('independent predicate replay mismatch')
-                r=copy.deepcopy(packet['result']);r.update(elapsed_s=run['elapsed_s'],plan_revisions=run['plan_revisions'])
-                groups[run['mode']][run['seed']]=r;initial[(run['mode'],run['seed'])]=packet['initial_state_sha256']
-            if any(len(g)!=R for g in groups.values()) or groups['first'].keys()!=groups['final'].keys():raise ValueError('paired seeds/repeats missing')
-            # Raw contact ordering can differ; compare layouts canonically as V3
-            # does rather than raw physical-state hashes.
-            for seed in groups['first']:
-                pair=[r for r in runs if r['task_id']==task['task_id'] and r['seed']==seed]
-                poses=[v3.object_map(v3.read_json(Path(base_dir)/r['initial_layout']),task.get('target_layout',v3.read_json(Path(base_dir)/r['initial_layout']))) for r in pair]
-                if len(pair)!=2 or poses[0].keys()!=poses[1].keys() or not all(math.dist(poses[0][k]['position'],poses[1][k]['position'])<=1e-6 and v3.rotation_error_deg(poses[0][k]['rotation'],poses[1][k]['rotation'])<=1e-5 for k in poses[0]):raise ValueError('initial seed pairing mismatch')
-            cfg=self.config_for_task(task,suite['config'])
-            summary=v3.summarize([groups['first'][s] for s in sorted(groups['first'])],[groups['final'][s] for s in sorted(groups['final'])],cfg)
-            per_task.append({'task_id':task['task_id'],'tier':task['tier'],**summary})
+                r=copy.deepcopy(packet['result']);r.update(elapsed_s=run['elapsed_s'])
+                by_seed[run['seed']]=r
+            if len(by_seed)!=R:raise ValueError('repeats missing')
+            # ★ 新分：单 case 内部 **100 分**（目标 70 + 保持 30），
+            #   5 个 seed 等权平均（`plan/Track2_终态连续评分_改造方案.md` §1）。
+            scores=[by_seed[s]['score_100'] for s in sorted(by_seed)]
+            score_100=sum(scores)/len(scores)
+            per_task.append({'task_id':task['task_id'],'tier':task['tier'],
+                             'score_100':score_100,
+                             'score_target':sum(by_seed[s]['score_target'] for s in sorted(by_seed))/len(scores),
+                             'score_preserve':sum(by_seed[s]['score_preserve'] for s in sorted(by_seed))/len(scores),
+                             'episodes':len(scores)})
         path=Path(base_dir)/'extension_private_evidence.json';path.write_text(json.dumps({str(k):v for k,v in self.packets.items()},allow_nan=False));path.chmod(0o600)
         from track2_judge.contract.profile import PROFILE
         confirmed=all(t.get('scoring_profile')==PROFILE for t in tasks)
-        score=100*sum(t['S'] for t in per_task)/len(per_task)
-        return {'schema':SCHEMA,'tasks':per_task,'candidate_score_100':score,'frozen_rule_score_100':score if confirmed else None,'official_score':None,'formula':'actual immutable V3.summarize','contract_status':'FROZEN_AUTHOR_PDF_RULES' if confirmed else 'DIAGNOSTIC_EXTENSION','private_evidence_sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
+        # 总分：50 例（这里 `len(tasks)`）**等权平均**；每 case 满分 2 分保留在报告层。
+        total=sum(t['score_100'] for t in per_task)/len(per_task)
+        return {'schema':SCHEMA,'tasks':per_task,'candidate_score_100':total,
+                # ⚠️ 旧分：**仅作 legacy diagnostic**，不是正式验收指标（§3.6）。
+                'legacy_diagnostic':{'note':'旧口径（V3 summarize）已停用，语义不同，不做提升/下降解释'},
+                'frozen_rule_score_100':None,'official_score':None,
+                'formula':'continuous terminal-state scoring (target 70 + preserve 30)',
+                'contract_status':'FROZEN_AUTHOR_PDF_RULES' if confirmed else 'DIAGNOSTIC_EXTENSION',
+                'private_evidence_sha256':hashlib.sha256(path.read_bytes()).hexdigest()}

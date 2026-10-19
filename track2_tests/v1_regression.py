@@ -61,16 +61,16 @@ def main(output,isolated=False):
     test('frozen_scoring_equivalence_threshold',score_match)
     def chain(kind,count=0,budget=2400):
         result=CandidateRunner(factory(count,budget),isolated=isolated,trusted=True,timeout_s=.35 if kind=='timeout' else 15,max_steps=budget).run(suite(),output/kind,{'text_instruction':kind})
-        runs=json.loads((output/kind/'runs.json').read_text());assert len(runs['runs'])==10
-        assert [r['seed'] for r in runs['runs'][::2]]==list(range(5))
+        runs=json.loads((output/kind/'runs.json').read_text());assert len(runs['runs'])==5
+        assert [r['seed'] for r in runs['runs']]==list(range(5))
         initial_hashes=[]
-        for i in range(0,10,2):
-            a=(output/kind/runs['runs'][i]['initial_layout']).read_bytes()
-            b=(output/kind/runs['runs'][i+1]['initial_layout']).read_bytes()
-            assert a==b
+        for r in runs['runs']:
+            a=(output/kind/r['initial_layout']).read_bytes()
             initial_hashes.append(hashlib.sha256(a).hexdigest())
         assert len(set(initial_hashes))==5
-        assert all(r['attempts']<= (1 if r['mode']=='first' else 3) for r in result['episodes'])
+        # ★ 2026-10-18 取消 first/final：每 episode **恒 1 次**执行，
+        #   episode 记录里已没有 `mode` 键（`replan_budget` 也一并删除）。
+        assert all(r['attempts']==1 for r in result['episodes'])
         if kind in ('illegal','private','forge','oversized'):assert all(e['status']=='error' for e in result['episodes'])
         # 2026-10-18：'timeout' 与 'budget' 两条都源自**比赛预算**
         #   （episode 墙钟 / 控制步预算）→ 可评分终态 `budget_timeout`。
@@ -80,8 +80,13 @@ def main(output,isolated=False):
         elif kind=='budget':assert all(e['status']=='budget_timeout' for e in result['episodes'])
         elif count==3:assert all(e['status']=='success' for e in result['episodes'])
         else:assert all(e['status']=='failure' for e in result['episodes'])
-        raw=v3.evaluate(suite(),{'schema_version':1,'runs':runs['runs']},output/kind)
-        assert raw['score_100']==result['raw_frozen_score_100']
+        # ★ 2026-10-18 取消 first/final（单模式）后，冻结 V3 路径**不再产分**：
+        #   `v3.evaluate`（冻结件，不可改）硬要求 first/final 配对（`tasks*R*2`），
+        #   单模式下必然拒；它现在**仅作 legacy diagnostic**，不参与验收。
+        #   所以 `candidate_runner` 明确 `scoring_status=REFUSED...` 且不写
+        #   `raw_frozen_score_100`（不伪造、不静默跳过）。这里断言这一显式行为。
+        assert 'raw_frozen_score_100' not in result,result
+        assert result['scoring_status']=='REFUSED: frozen paired scorer retired (single-mode)',result
         return result
     for kind,count in [('move',3),('partial',2),('below',1),('noop',0),('illegal',0),('private',0),('forge',0),('oversized',0),('timeout',0)]:
         test('chain_'+kind,lambda k=kind,c=count:chain(k,c))

@@ -25,7 +25,9 @@ SCHEMA='track2-result-gate-v1'
 #       （见 `sandbox/rpc.py` 的 `BudgetTimeout` 与 `toolapi/client.py` 的
 #       `ActionStoppedUnknown`）。它只是**碰巧也是超时**，但与比赛预算无关。
 #   见 report/requirement/Track2_评分口径变更_效率项改超时.md §1.3。
-SCORABLE_TERMINAL_STATUS = frozenset({'success', 'failure', 'budget_timeout'})
+#   * `skill_error` —— ★ F2（2026-10-18）：**选手包自己抛了异常**。
+#     它不是链路故障，按冻结的物理终态照常判分（可评分）。
+SCORABLE_TERMINAL_STATUS = frozenset({'success', 'failure', 'budget_timeout', 'skill_error'})
 
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def canonical(value): return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
@@ -74,10 +76,12 @@ class ResultGate:
             suite=json.loads((root/'suite.json').read_text());runs=json.loads((root/'runs.json').read_text())['runs']
             diagnosis=json.loads((root/'diagnosis.json').read_text());evidence=json.loads((root/'artifacts/evidence.json').read_text())
             receipt=json.loads((root/'verification_receipt.json').read_text());record_manifest=json.loads((root/'artifacts/runner_manifest.json').read_text())
-            expected=len(suite['tasks'])*suite['config']['repeats']*2
+            # ★ 2026-10-18 取消 first/final：每 seed 1 次（不再 `*2`）。
+            expected=len(suite['tasks'])*suite['config']['repeats']
             if receipt.get('schema')!='track2-verification-receipt-v1' or receipt.get('verified') is not True or receipt.get('expected_runs')!=expected or receipt.get('verifier') not in ('trusted_contract_extension','frozen_v3'): reject('VERIFIER_FAILED')
             if len(runs)!=expected or record_manifest.get('run_count')!=expected or len(evidence.get('runs',[]))!=expected: reject('RECORDER_INCOMPLETE')
-            # 2026-10-18：三态可评分 —— `SCORABLE_TERMINAL_STATUS`。
+            # 2026-10-18：**四种可评分终态** —— `SCORABLE_TERMINAL_STATUS`
+            #   （success / failure / budget_timeout / skill_error）。
             # `budget_timeout` 放行；`infrastructure_timeout` 落进 EXECUTION_EXCEPTION。
             if len(diagnosis.get('episodes',[]))!=expected or any(e.get('status') not in SCORABLE_TERMINAL_STATUS for e in diagnosis.get('episodes',[])): reject('EXECUTION_EXCEPTION')
             # ① 兜底（2026-10-18）：provider 侧动作账本不完整。
@@ -89,7 +93,9 @@ class ResultGate:
             #   见 plan/Track2_丢包自锁修复方案.md §3.1/§3.2。
             if any(e.get('execution_integrity') == 'INCOMPLETE'
                    for e in diagnosis.get('episodes',[])): reject('ACTION_EXECUTION_INCOMPLETE')
-            if diagnosis.get('scoring_status') not in ('FROZEN_AUTHOR_PDF_RULES',None) or diagnosis.get('candidate_status') in ('EXECUTION_FAILURE',): reject('EXECUTION_EXCEPTION')
+            # ★ 2026-10-18：新词是 `CONTINUOUS_TERMINAL_STATE`（终态连续评分）；
+            #   旧词 `FROZEN_AUTHOR_PDF_RULES` 保留兼容历史产物。
+            if diagnosis.get('scoring_status') not in ('CONTINUOUS_TERMINAL_STATE','FROZEN_AUTHOR_PDF_RULES',None) or diagnosis.get('candidate_status') in ('EXECUTION_FAILURE',): reject('EXECUTION_EXCEPTION')
             ledger=receipt.get('artifact_sha256',{})
             for rel in required[:-1]:
                 if rel not in ledger: reject('RECEIPT_INCOMPLETE')
@@ -98,19 +104,18 @@ class ResultGate:
                 if Path(rel).is_absolute() or '..' in Path(rel).parts or p.is_symlink() or root not in p.resolve().parents:
                     reject('EVIDENCE_PATH_REJECTED');continue
                 if not p.is_file() or sha(p)!=expected_hash: reject('EVIDENCE_HASH_MISMATCH')
-            by_id={e['run_id']:e for e in evidence.get('runs',[])};seen=set();paired={};tasks={t['task_id']:t for t in suite['tasks']}
+            by_id={e['run_id']:e for e in evidence.get('runs',[])};seen=set();tasks={t['task_id']:t for t in suite['tasks']}
             for run in runs:
-                key=(run['task_id'],run['mode'],run['seed'])
-                if key in seen or run['mode'] not in ('first','final') or run['task_id'] not in tasks: reject('RUN_IDENTITY_INVALID')
+                key=(run['task_id'],run['seed'])
+                if key in seen or run['task_id'] not in tasks: reject('RUN_IDENTITY_INVALID')
                 seen.add(key);ev=by_id.get(run['run_id'],{});verification=ev.get('verification',{})
-                # 同上：三条可评分终态（含 `budget_timeout`）。⚠️ 这一条查的是
+                # 同上：四条可评分终态（含 `budget_timeout` / `skill_error`）。⚠️ 这一条查的是
                 # **运行记录里的 status**（`recorder` 落盘的那份），不是选手自报的。
                 if ev.get('status') not in SCORABLE_TERMINAL_STATUS or ev.get('error'): reject('EXECUTION_EXCEPTION')
                 # 谓词判定仍然只有 success/failure —— `budget_timeout` 只是
                 # 「执行怎么结束的」，判定本身照常二值。
                 if verification.get('status') not in ('success','failure') or not isinstance(verification.get('predicates'),list) or not verification['predicates'] or any(p.get('status') not in ('success','failure') for p in verification['predicates']): reject('VERIFIER_FAILED')
                 if type(run.get('elapsed_s')) not in (int,float) or not math.isfinite(run['elapsed_s']) or run['elapsed_s']<=0: reject('TIMING_INVALID')
-                if type(run.get('plan_revisions')) is not int or not 0<=run['plan_revisions']<=(0 if run['mode']=='first' else suite['config']['replan_budget']): reject('REPLAN_INVALID')
                 names=set()
                 for field in ('initial_layout','final_layout'):
                     rel=run[field];p=root/rel
@@ -122,12 +127,13 @@ class ResultGate:
                     for o in objects:
                         if len(o.get('position',[]))!=3 or len(o.get('rotation',[]))!=4 or any(type(x) not in (int,float) or not math.isfinite(x) for x in o['position']+o['rotation']): reject('STATE_INCOMPLETE')
                     if field=='initial_layout':names=canonical(value)
-                pair=(run['task_id'],run['seed']);paired.setdefault(pair,{})[run['mode']]=names
-            if any(set(v)!= {'first','final'} or v['first']!=v['final'] for v in paired.values()): reject('PAIRED_STATE_INVALID')
             score_name='extension_candidate_score.json' if 'extension_candidate_score.json' in ledger else 'frozen_score_diagnostic.json'
             if score_name not in ledger: reject('SCORER_OUTPUT_MISSING')
             else:
-                report=json.loads((root/score_name).read_text());score=report.get('frozen_rule_score_100',report.get('score_100'))
+                report=json.loads((root/score_name).read_text())
+                # ★ 2026-10-18：新评分报告顶层是 `candidate_score_100`（终态连续评分）；
+                #   旧格式曾是 `frozen_rule_score_100` / `score_100`（已停用）。
+                score=report.get('candidate_score_100',report.get('frozen_rule_score_100',report.get('score_100')))
                 if type(score) not in (int,float) or not math.isfinite(score) or not 0<=score<=100: reject('SCORER_OUTPUT_INVALID')
             if diagnosis.get('gt_access_status')!='PASS': reject('GT_READ_EXCEPTION')
         except Exception as exc:

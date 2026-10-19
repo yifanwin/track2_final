@@ -15,17 +15,18 @@ def fixture(root):
     layout={'objects':[{'instance':'SYNTHETIC_BLOCK','position':[0,0,0],'rotation':[0,0,0,1]}]}
     task={'task_id':'SYNTHETIC_ONLY','target_layout':layout}
     runs=[];evidence=[];episodes=[]
+    # ★ 2026-10-18 取消 first/final：每 seed **1** 条 run（不再 `first`/`final` 两条），
+    #   落盘记录里没有 `mode`、也没有 `plan_revisions`（见 runner/recorder.py）。
     for seed in range(5):
-        for mode in ('first','final'):
-            ident='%s_%s'%(seed,mode);initial='artifacts/states/'+ident+'_initial.json';final='artifacts/states/'+ident+'_final.json'
-            atomic_json(root/initial,layout);atomic_json(root/final,layout)
-            runs.append({'run_id':ident,'task_id':task['task_id'],'mode':mode,'seed':seed,'initial_layout':initial,'final_layout':final,'elapsed_s':1.,'plan_revisions':0})
-            evidence.append({'run_id':ident,'status':'failure','error':None,'verification':{'status':'failure','predicates':[{'status':'failure'}]}})
-            episodes.append({'status':'failure'})
-    for n,d in {'suite.json':{'tasks':[task],'config':{'repeats':5,'replan_budget':2}},'runs.json':{'runs':runs},
-                'artifacts/evidence.json':{'runs':evidence},'artifacts/runner_manifest.json':{'run_count':10},
+        ident=str(seed);initial='artifacts/states/'+ident+'_initial.json';final='artifacts/states/'+ident+'_final.json'
+        atomic_json(root/initial,layout);atomic_json(root/final,layout)
+        runs.append({'run_id':ident,'task_id':task['task_id'],'seed':seed,'initial_layout':initial,'final_layout':final,'elapsed_s':1.})
+        evidence.append({'run_id':ident,'status':'failure','error':None,'verification':{'status':'failure','predicates':[{'status':'failure'}]}})
+        episodes.append({'status':'failure'})
+    for n,d in {'suite.json':{'tasks':[task],'config':{'repeats':5}},'runs.json':{'runs':runs},
+                'artifacts/evidence.json':{'runs':evidence},'artifacts/runner_manifest.json':{'run_count':5},
                 'diagnosis.json':{'episodes':episodes,'gt_access_status':'PASS'},'frozen_score_diagnostic.json':{'score_100':30.}}.items():atomic_json(root/n,d)
-    write_receipt(root,'frozen_score_diagnostic.json',expected_runs=10,verifier='frozen_v3')
+    write_receipt(root,'frozen_score_diagnostic.json',expected_runs=5,verifier='frozen_v3')
     return root
 
 def main(output):
@@ -35,11 +36,11 @@ def main(output):
         'recorder_missing':lambda r:(r/'artifacts/evidence.json').unlink(),
         'receipt_missing':lambda r:(r/'verification_receipt.json').unlink(),
         'record_tamper':lambda r:atomic_json(r/'runs.json',{'runs':[]}),
-        'state_missing':lambda r:(r/'artifacts/states/0_first_final.json').unlink(),
+        'state_missing':lambda r:(r/'artifacts/states/0_final.json').unlink(),
         'verifier_failed':lambda r:atomic_json(r/'verification_receipt.json',{'verified':False}),
-        'runtime_exception':lambda r:atomic_json(r/'diagnosis.json',{'episodes':[{'status':'timeout'}]*10,'gt_access_status':'PASS'}),
-        'gt_read_exception':lambda r:atomic_json(r/'diagnosis.json',{'episodes':[{'status':'failure'}]*10,'gt_access_status':'FAILED'}),
-        'nonfinite_state':lambda r: (r/'artifacts/states/0_first_final.json').write_text('{"objects":[{"instance":"SYNTHETIC_BLOCK","position":[NaN,0,0],"rotation":[0,0,0,1]}]}'),
+        'runtime_exception':lambda r:atomic_json(r/'diagnosis.json',{'episodes':[{'status':'timeout'}]*5,'gt_access_status':'PASS'}),
+        'gt_read_exception':lambda r:atomic_json(r/'diagnosis.json',{'episodes':[{'status':'failure'}]*5,'gt_access_status':'FAILED'}),
+        'nonfinite_state':lambda r: (r/'artifacts/states/0_final.json').write_text('{"objects":[{"instance":"SYNTHETIC_BLOCK","position":[NaN,0,0],"rotation":[0,0,0,1]}]}'),
         'score_tamper':lambda r:atomic_json(r/'frozen_score_diagnostic.json',{'score_100':100}),
     }
     for name,mutate in faults.items():

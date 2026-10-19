@@ -8,7 +8,7 @@
   "version": "1.0.0",
   "entrypoint": "entrypoint.py",
   "api_version": "ctrc-skill-v1",
-  "tool_profile": ["track2.env.observe", "track2.robot.joint_control"]
+  "tool_profile": ["track2.env.observe", "track2.robot.joint_trajectory"]
 }
 ```
 

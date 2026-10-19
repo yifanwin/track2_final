@@ -3,7 +3,7 @@ import hashlib, os, shutil, stat, time, zipfile,json
 from pathlib import Path, PurePosixPath
 from track2_judge.runner.skill_manifest import SkillPackage
 from track2_judge.runner.version import SKILL_API_VERSION
-from track2_judge.sandbox.rpc import BudgetTimeout, SkillProcess, SkillTimeout
+from track2_judge.sandbox.rpc import BudgetTimeout, SkillError, SkillProcess, SkillTimeout
 
 def unpack_skill(source,destination):
     source=Path(source).resolve();destination=Path(destination).resolve()
@@ -110,6 +110,13 @@ class PackageExecutor:
                 #    因为摘要来自**子进程**发给我们的消息）。
                 kind=str(msg.get('type'))[:32]
                 category=str(msg.get('category') or msg.get('error') or '')[:120]
+                # ★ F2（2026-10-18）：**选手包自己抛了异常**（子进程发来的
+                #   `error` 消息）与「协议/链路坏了」是两回事：
+                #   * 选手包崩 → 该 episode 记 `skill_error`，**仍按终态评分**（可评分）
+                #   * 协议/链路坏 → 仍是 `infrastructure_timeout`（阻断）
+                #   不分开的话，迁移期一个没改过的老包会让 50 个 case 全 BLOCKED。
+                if kind == 'error':
+                    raise SkillError('contestant package error: category=%s' % category)
                 raise RuntimeError('package execution/protocol rejected: '
                                    'type=%s category=%s' % (kind,category))
     def close(self):

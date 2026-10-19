@@ -33,19 +33,14 @@ class ToolClient:
     def observe(self, **kwargs) -> dict[str, Any]:
         return self.call("observe", dict(kwargs))
 
-    # 第 2 步：`joint_control` / `gripper_control` 是**新契约的方法名**。
-    # 下面三个旧名保留为别名 —— 它们在评测器侧统一映射到同一套 ToolSpec。
-    def joint_control(self, joint_position, gripper_opening_m):
-        return self.call('joint_control', {'joint_position': joint_position,
-                                           'gripper_opening_m': gripper_opening_m})
+    # 第 2 步新契约：`joint_trajectory` / `gripper_control` 是**方法名**。
+    # ⚠️ 2026-10-18 强制 Action Chunk：`joint_control` / `step` /
+    #    `piper_joint_control` **已真删** —— 沙箱内调它们会 `AttributeError`。
+    #    只保留夹爪的旧名（单步语义未变）。
+    def joint_trajectory(self, targets):
+        return self.call('joint_trajectory', {'targets': targets})
     def gripper_control(self, gripper_opening_m):
         return self.call('gripper_control', {'gripper_opening_m': gripper_opening_m})
-    def step(self, joint_position, gripper_opening_m):
-        return self.call('step', {'joint_position': joint_position,
-                                  'gripper_opening_m': gripper_opening_m})
-    def piper_joint_control(self, joint_position, gripper_opening_m):
-        return self.call('piper_joint_control', {'joint_position': joint_position,
-                                                 'gripper_opening_m': gripper_opening_m})
     def piper_gripper_control(self, gripper_opening_m):
         return self.call('piper_gripper_control', {'gripper_opening_m': gripper_opening_m})
 

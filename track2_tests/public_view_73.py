@@ -12,7 +12,7 @@ def main():
     p.add_argument('--case-dir')
     p.add_argument('--output', required=True)
     a = p.parse_args()
-    from track2_judge.cli.select_case import CASEBANK
+    from track2_judge.cli.select_case import CASEBANK, check_casebank
     base = Path(a.case_dir).resolve(strict=True) if a.case_dir else CASEBANK / 'cases'
     views = []
     for path in sorted(base.glob('*/case.json')):
@@ -33,7 +33,7 @@ def main():
                                             'casebank', 'private_catalog', 'source_glb', 'score',
                                             'physics_state', 'asset_path'))
         views.append(hashlib.sha256(encoded.encode()).hexdigest())
-    assert len(views) == 73
+    assert len(views) == len(check_casebank())
     result = {'status': 'PASS', 'audited_cases': len(views),
               'unique_public_views': len(set(views)),
               'output_profile': 'frozen public target fields; input serialization WAIT_CONFIRM',

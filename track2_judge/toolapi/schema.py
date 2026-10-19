@@ -24,7 +24,7 @@ PAOS 的 `ForgeSkillBindingResolver.preview()` 对每个 ToolSpec 算
 | tool_id | semantics | 说明 |
 |---|---|---|
 | `track2.env.observe` | **query** | 读当前观测（机器人本体 + 批准图像） |
-| `track2.robot.joint_control` | **action** | 一步关节目标 + 夹爪开度 |
+| `track2.robot.joint_trajectory` | **action** | 一段短轨迹（`targets`，8–25 步）—— **唯一的关节控制途径** |
 | `track2.robot.gripper_control` | **action** | 只动夹爪 |
 
 依据：Q5（Action 语义）、Q8（关节控制）、Q11（路线 B，自造 `track2.*`）、Q4（模式 B 观测）。
@@ -143,35 +143,68 @@ _OBSERVE = {
     "robot_frame_profile": ROBOT_FRAME_PROFILE,
 }
 
-# ──────────────────────────────────────── joint_control / gripper_control（Action）
+# ─────────────────────────────────── joint_trajectory / gripper_control（Action）
 
 # Q13：超时后必须先 cancel，再等 backend 确认真实停止。
 # Q14（2026-10-18 定）：全量 73 例实测 p50 0.097 / p99 0.675 / max 0.940 s
 #   → 取 5.0 s（≈ max 的 5.3 倍）。**客户端先到点**（< gateway 的
 #   `invoke_timeout_ms=30000`），避免两者同刻到点的竞态。
+#
+# ⚠️ 2026-10-18 强制 Action Chunk 改造：`action_timeout_s` **统一 5.0 s**
+#   （不再分档）。最长 chunk = 25 步 × ~64.5 ms ≈ 1.6 s ⇒ 余量仅 **3.1×**
+#   （单步时是 5.3×）。这是本次改造最薄的一处，真策略到位后要复测 p99.9；
+#   不足则把 `ACTION_CHUNK_MAX` 从 25 降到 16。见
+#   `plan/Track2_强制ActionChunk_契约设计.md` §4.3。
 ACTION_TIMEOUT_S = 5.0
-ACTION_TIMEOUT_SOURCE = "MEASURED_73_CASES_P99_PLUS_MARGIN"
+ACTION_TIMEOUT_SOURCE = "MEASURED_73_CASES_P99_PLUS_MARGIN; CHUNK_UNIFIED_2026-10-18"
 
 # Q9：关节控制天然串行，两个 Action 均为 1。
 ACTION_MAX_CONCURRENCY = 1
 
-_JOINT_CONTROL = {
-    "tool_id": "track2.robot.joint_control",
+#: Action Chunk 的步数上下界（**强制 chunk** 的落点）。
+#:
+#: * `ACTION_CHUNK_MIN = 8`：堵死「单步退化」——选手**不可能**再一小步一小步走。
+#:   8 步 ≈ 0.4 s 仿真，也是「最短盲区」（chunk 内部不重拍图）。
+#: * `ACTION_CHUNK_MAX = 25`：一次调用的物理上限；也决定 chunk 超时余量（§4.3）。
+#:
+#: 「填充式调用」（8 个目标里只有 1 步真的动）**不承认** —— 它过得了 slew 校验，
+#: 但被步预算天然罚到 1/8 效率（容量 = 步预算 / MIN = 400/8 = 50 步，
+#: 而诚实策略跑完典型 case 需 ≥58 步 ⇒ 纯填充**做不完**）。
+#: 见 `plan/Track2_强制ActionChunk_契约设计.md` §1.2。
+ACTION_CHUNK_MIN = 8
+ACTION_CHUNK_MAX = 25
+
+_TRAJECTORY_CONTROL = {
+    "tool_id": "track2.robot.joint_trajectory",
     "implementation_id": IMPLEMENTATION_ID,
     "endpoint_id": "track2.robot",
-    "operation": "joint_control",
+    "operation": "trajectory_control",
     "semantics": "action",
-    "description": "Command one joint position target plus gripper opening. The physical effect "
-                   "completes when the Action terminates.",
+    "description": "Execute an action chunk: a short pre-computed joint trajectory. This is the "
+                   "ONLY way to move the arm. Each consecutive pair of targets must respect the "
+                   "per-step slew limit; the whole chunk is validated first and rejected as a unit.",
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
-        "required": ["joint_position", "gripper_opening_m"],
+        "required": ["targets"],
         "properties": {
-            # 6 个臂关节（deg 无关，单位 rad）。夹爪开度单列，不混在这里。
-            "joint_position": {"type": "array", "items": {"type": "number"},
-                               "minItems": 6, "maxItems": 6},
-            "gripper_opening_m": {"type": "number", "minimum": 0, "maximum": 0.1},
+            "targets": {
+                "type": "array",
+                "minItems": ACTION_CHUNK_MIN,      # ★ 强制：不接受单步
+                "maxItems": ACTION_CHUNK_MAX,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["joint_position", "gripper_opening_m"],
+                    "properties": {
+                        # 6 个臂关节（rad）。夹爪开度单列，不混在这里。
+                        "joint_position": {"type": "array", "items": {"type": "number"},
+                                           "minItems": 6, "maxItems": 6},
+                        "gripper_opening_m": {"type": "number",
+                                              "minimum": 0, "maximum": 0.1},
+                    },
+                },
+            },
         },
     },
     "output_schema": {
@@ -181,6 +214,9 @@ _JOINT_CONTROL = {
         "properties": {
             "control_steps": {"type": "integer", "minimum": 1},
             "sim_time_s": {"type": "number"},
+            # 实际推进了几步（被 cancel / 撞预算边界时 < len(targets)）。
+            # ⚠️ 它 < len(targets) **不代表失败** —— 判定只读最终物理状态。
+            "executed_steps": {"type": "integer", "minimum": 0},
         },
     },
     "readiness": [],
@@ -219,7 +255,7 @@ _GRIPPER_CONTROL = {
 
 SPECS: dict[str, dict[str, Any]] = {
     _OBSERVE["tool_id"]: _OBSERVE,
-    _JOINT_CONTROL["tool_id"]: _JOINT_CONTROL,
+    _TRAJECTORY_CONTROL["tool_id"]: _TRAJECTORY_CONTROL,
     _GRIPPER_CONTROL["tool_id"]: _GRIPPER_CONTROL,
 }
 

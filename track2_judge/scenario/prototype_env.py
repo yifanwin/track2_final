@@ -82,30 +82,26 @@ def run(args):
         factory.source='LOCAL CPU PhysX + ManiSkill + Piper; synthetic scoring target'
         diag=CandidateRunner(factory,isolated=True,timeout_s=.4 if args.instruction=='timeout' else 90,max_steps=1000).run(suite,output/'closure',{'text_instruction':args.instruction})
         traces=json.loads((output/'closure/physical_trace.json').read_text())
-        episodes=diag['episodes']; assert len(episodes)==10
+        episodes=diag['episodes']; assert len(episodes)==5
         expected='timeout' if args.instruction=='timeout' else 'error' if args.instruction=='illegal' else 'success' if args.goal=='stationary' else 'failure'
         assert all(e['status']==expected for e in episodes),episodes
-        if expected=='failure':assert all(e['attempts']==(1 if e['mode']=='first' else 3) for e in episodes)
+        if expected=='failure':assert all(e['attempts']==1 for e in episodes)
         motion=0
         if args.instruction=='move':
             assert traces
             q0=traces[0]['physical']['qpos'];motion=max(abs(s['physical']['qpos'][0]-q0[0]) for s in traces)
             assert motion>.02
-        score=json.loads((output/'closure/frozen_score_diagnostic.json').read_text())
-        direct=v3.evaluate(suite,json.loads((output/'closure/runs.json').read_text()),output/'closure')
-        assert score==direct
-        expected_sr=1. if args.goal=='stationary' else 2/3 if args.goal=='partial' else 0.
-        # These cases use actual static-within-tolerance object poses, not commanded success.
-        if args.instruction in ('move','noop') and not args.ttg:
-            assert abs(score['tasks'][0]['SR_first']-expected_sr)<1e-12
-            assert abs(score['tasks'][0]['SR_final']-expected_sr)<1e-12
+        # ★ 2026-10-18：冻结 V3 评分器要求 first/final 配对，单模式下**不再产分**。
+        #   这条诊断路径明确断言「不产分」，与 `candidate_runner` 的行为一致。
+        assert diag.get('scoring_status')=='REFUSED: frozen paired scorer retired (single-mode)',diag.get('scoring_status')
+        assert 'raw_frozen_score_100' not in diag
         runs=json.loads((output/'closure/runs.json').read_text())['runs'];hashes=[]
-        for i in range(0,10,2):
-            a=(output/'closure'/runs[i]['initial_layout']).read_bytes();b=(output/'closure'/runs[i+1]['initial_layout']).read_bytes()
-            assert a==b;hashes.append(hashlib.sha256(a).hexdigest())
+        for run in runs:
+            a=(output/'closure'/run['initial_layout']).read_bytes()
+            hashes.append(hashlib.sha256(a).hexdigest())
         assert len(set(hashes))==5
-        result={'status':'PASS','scope':'actual physics closure with synthetic goals; stationary success is not successful pick/place or official evaluation','goal_policy':args.goal,'instruction':args.instruction,'expected_execution_status':expected,'episodes':10,'recorded_control_steps':len(traces),'joint_motion_rad':motion,
-                'all_failure':expected=='failure','distinct_paired_seed_layouts':5,'SR_first':score['tasks'][0]['SR_first'],'SR_final':score['tasks'][0]['SR_final'],'strict_success_rate':score['tasks'][0]['strict_success_rate_final'],'raw_diagnostic_score':diag['raw_frozen_score_100'],'official_score':None,'grasp_success':'NOT TESTED: joint/gripper diagnostic does not establish successful grasp',
+        result={'status':'PASS','scope':'actual physics closure with synthetic goals; stationary success is not successful pick/place or official evaluation','goal_policy':args.goal,'instruction':args.instruction,'expected_execution_status':expected,'episodes':5,'recorded_control_steps':len(traces),'joint_motion_rad':motion,
+                'all_failure':expected=='failure','distinct_initial_states':5,'official_score':None,'grasp_success':'NOT TESTED: joint/gripper diagnostic does not establish successful grasp',
                 'versions':{k:importlib.metadata.version(k) for k in ('mani_skill','sapien','torch','numpy','scipy')},'engine':'cpu PhysX','GPU_used':False,
                 'asset_collision_counts':{k:v.get('hull_count') for k,v in load.items()},'public_observation':'proprioception and approved internal instruction; camera NOT IMPLEMENTED'}
     except Exception as exc:

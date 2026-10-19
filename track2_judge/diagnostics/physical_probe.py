@@ -22,15 +22,15 @@ class ProbeRunner:
         task=suite['tasks'][0];config=suite['config'];name=next(p['object'] for p in public_inputs['predicates'] if p['type']=='P2')
         recorder=TrustedRecorder(out/'artifacts',skill_hash=package.package_hash,suite_hash=canonical_json_hash(suite),runs_dir=out)
         results=[];summaries=[]
-        for mode in ('first','final'):
+        for mode in ('single',):   # ★ 2026-10-18 取消 first/final
             adapter=None;process=None;phase='initialization';metrics={'control_calls':0,'peak_lift_m':0.,'bilateral_samples':0,'airborne_samples':0};status='error';category=None
             try:
                 adapter=self.factory(task,0,mode);adapter.reset(seed=0,public_task_inputs=public_inputs)
                 initial=adapter.get_layout();istate=adapter.get_final_state();z0=istate['objects'][name]['actor_p_m'][2];calls=[]
                 process=PackageExecutor(package,out/'skill_work',isolated=True,timeout_s=90)
-                process.initialize({'skill_api_version':'ctrc-skill-v1','tool_profile':'piper-joint-v2-candidate','mode':mode,'environment':'sim','timeout_s':90,'tool_call_budget':2400})
+                process.initialize({'skill_api_version':'ctrc-skill-v1','tool_profile':'piper-joint-v2-candidate','environment':'sim','timeout_s':90,'tool_call_budget':200})
                 def dispatch(method,payload):
-                    if method not in ('observe','step','piper_joint_control','piper_gripper_control'):raise ValueError('forbidden tool')
+                    if method not in ('observe','joint_trajectory','piper_gripper_control'):raise ValueError('forbidden tool')
                     result=adapter.dispatch_public(method,payload);calls.append({'method':method,'payload':payload})
                     if method!='observe':
                         metrics['control_calls']+=1
@@ -49,13 +49,13 @@ class ProbeRunner:
                 try:feedback=process.run(adapter.observe(),dispatch,timeout_s=90,max_requests=2400);status='completed'
                 except Exception as exc:status='error';category='SKILL_OR_INTERFACE_'+type(exc).__name__
                 elapsed=max(time.monotonic()-start,1e-6);phase='verification';final=adapter.get_layout();fstate=adapter.get_final_state();events=adapter.get_event_evidence([])
-                verified=self.verifier.verify(task,initial,final,config,event_evidence=events,initial_state=istate,final_state=fstate,mode=mode)
-                recorder.record(task_index=0,task=task,mode=mode,seed=0,environment='sim',initial_layout=initial,final_layout=final,elapsed_s=elapsed,plan_revisions=0,event_violations={},verification=verified,tool_calls=calls,status='success' if status=='completed' and verified['success'] else 'failure' if status=='completed' else 'error',error=category)
+                verified=self.verifier.verify(task,initial,final,config,event_evidence=events,initial_state=istate,final_state=fstate)
+                recorder.record(task_index=0,task=task,seed=0,environment='sim',initial_layout=initial,final_layout=final,elapsed_s=elapsed,event_violations={},verification=verified,tool_calls=calls,status='success' if status=='completed' and verified['success'] else 'failure' if status=='completed' else 'error',error=category)
                 health=adapter.get_physics_health()
                 metrics['baseline_ik_residual']=feedback.get('max_ik_residual')
                 metrics['baseline_note']=feedback.get('baseline')
                 results.append({'mode':mode,'execution':status,'error_category':category,'active_wall_s':elapsed,'tool_service_s':process.tool_service_s,'P1':next(p['passed'] for p in verified['predicates'] if p['type']=='P1'),'P2':next(p['passed'] for p in verified['predicates'] if p['type']=='P2'),'C1_violations':verified['violation_count'],'health_flags':sorted(health.get('flag_counts',{})),'health_frames':health.get('frames',0),'nonfinite_frames':health.get('nonfinite_frames',0),**metrics})
-                summaries.append({**verified,'elapsed_s':elapsed,'plan_revisions':0})
+                summaries.append({**verified,'elapsed_s':elapsed})
             except Exception as exc:results.append({'mode':mode,'execution':'error','phase':phase,'error_category':type(exc).__name__,**metrics})
             finally:
                 if process:process.close()
