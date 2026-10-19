@@ -120,6 +120,7 @@ def build_case_session(bundle: dict, casebank, seed: int, *,
                        max_steps: int = DEFAULT_MAX_STEPS,
                        max_sim_time_s: float = DEFAULT_MAX_SIM_TIME_S,
                        camera_spec: dict | None = None,
+                       render_device: str | int | None = None,
                        allow_unapproved_diagnostics: bool = True,
                        case_id: str | None = None) -> CaseSession:
     """造一个 case 的完整会话。**两侧（判官 / PAOS）都调它。**
@@ -153,7 +154,8 @@ def build_case_session(bundle: dict, casebank, seed: int, *,
         adapter=ManiSkillSimulatorAdapter(
             lambda: create_case_env(bundle, casebank, seed,
                                     allow_unapproved_diagnostics=allow_unapproved_diagnostics,
-                                    diagnostic_camera=camera_spec),
+                                    diagnostic_camera=camera_spec,
+                                    render_device=render_device),
             snapshot=physical_snapshot,
             spatial_provider=spatial_snapshot,
             metadata={n: {"pivot_m": [0, 0, 0]} for n in bundle["objects"]},

@@ -16,8 +16,8 @@
 * 越界（`w >= 可用 worker 数`）会**明确报错**，不静默退化。
 * `--workers > 1` 前必须先跑 `work/scripts/make_worker_bundles.sh N`。
 """
-import argparse, json, os, subprocess, sys, time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import argparse, json, os, subprocess, sys, threading, time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from track2_judge.cli.select_case import CASEBANK, check_casebank
@@ -100,13 +100,16 @@ results: list = [None] * len(case_ids)
 start = time.monotonic()
 
 
-def run_case(i: int, case_id: str) -> dict:
-    """跑第 `i` 个 case，返回它的结果行。
+def run_case(i: int, case_id: str, k: int = 0) -> dict:
+    """跑第 `i` 个 case，`k` 是**调用方显式指定的 worker 槽**。
 
     **并发安全**：只读全局（`a` / `out` / `release_entry` / …），
     唯一写入是 `results[i]`（由调用方在**主线程**落位）与该 case 自己的子目录。
-    `workers > 1` 时由线程池并发调用 —— 子进程本身才是并发的载体，
-    线程只做调度（`subprocess.run` 会释放 GIL）。
+    并发由**每 worker 一个线程、各自串行处理自己的 case 队列**实现 ——
+    子进程本身才是并发的载体，线程只做调度（`subprocess.run` 释放 GIL）。
+
+    ⚠️ **`k` 必须由调用方按「该线程独占的 slot」给**，不能在这里算
+    `i % workers` —— 那样会**两个 case 同时用同一份 Bundle**（见派发处的说明）。
     """
     destination = out / ('case_%03d' % i)
     cmd = [sys.executable, '-B', str(release_entry), '--case-id', case_id,
@@ -119,7 +122,6 @@ def run_case(i: int, case_id: str) -> dict:
     #   串行（workers==1）时不传 —— 沿用主 Bundle，行为与旧版逐字一致。
     env = dict(os.environ)
     if workers > 1:
-        k = i % workers
         env['TRACK2_BUNDLE_ROOT'] = str(_worker_bundle(k))
         # worker k → 物理卡 `gpu_list[k]`（默认 = k）。
         # ⚠️ 由 runtime 侧渲染进 `runtime.yaml` 的 `render_gpu` 生效；
@@ -217,20 +219,41 @@ def _write_summary() -> None:
 # ── 派发：串行 or 并行
 if workers == 1:
     for i, case_id in enumerate(case_ids):
-        results[i] = run_case(i, case_id)
+        results[i] = run_case(i, case_id, 0)
         print(json.dumps(results[i]), flush=True)
         _write_summary()
 else:
-    # 线程池：`subprocess.run` 释放 GIL，真正的并发是子进程本身。
-    # 结果按 `ordinal` 落位 ⇒ 完成顺序再乱，产物顺序与串行一致。
+    # ★ 并行派发：**每 worker 一个线程，各自串行处理自己的 case 队列**。
+    #
+    #   ⚠️ **不能用「一次性全提交给线程池 + `k = i % workers`」** ——
+    #   那有真实竞态（2026-10-19 发现）：池里的线程完成顺序被打乱后，
+    #   慢 case（占着 w0）还在跑时，别的空闲线程就会领走**同样取模到 w0**
+    #   的下一个 case（如 case 0 与 case 4 在 `workers=4` 时都是 w0）⇒
+    #   **两个 case 同时用同一份 Bundle / 同一个 gateway 端口**，
+    #   表现为 `gateway never ready`、`concurrency 1 exhausted` 等
+    #   极其难定位的故障。
+    #
+    #   现在改成「按 worker 分队列、队列内串行」：第 k 个 worker 只处理
+    #   `i % workers == k` 的 case，且**同一时刻只跑一个** ⇒
+    #   Bundle / 端口 / GPU 的独占性由**结构**保证，不依赖调度运气。
+    #   （`--limit` 下各队列长度可能不均，多出来的 worker 队列为空、自然退出。）
+    assignments = {
+        k: [(i, cid) for i, cid in enumerate(case_ids) if i % workers == k]
+        for k in range(workers)
+    }
+    lock = threading.Lock()
+
+    def _worker_loop(k: int) -> None:
+        for i, cid in assignments[k]:
+            row = run_case(i, cid, k)
+            with lock:
+                results[i] = row
+                print(json.dumps(row), flush=True)
+                _write_summary()
+
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(run_case, i, cid): i
-                   for i, cid in enumerate(case_ids)}
-        for fut in as_completed(futures):
-            i = futures[fut]
-            results[i] = fut.result()
-            print(json.dumps(results[i]), flush=True)
-            _write_summary()
+        for k in range(workers):
+            pool.submit(_worker_loop, k)
 
 # Q14：把 50 例的动作耗时汇总成一份可直接看分布的产物
 _timings = []

@@ -230,7 +230,7 @@ def _attach_visual(actor, name, visual):
     return True
 
 
-def create_case_env(bundle,casebank,seed=0,solver=(30,4),*,allow_unapproved_diagnostics=False,diagnostic_camera=None):
+def create_case_env(bundle,casebank,seed=0,solver=(30,4),*,allow_unapproved_diagnostics=False,diagnostic_camera=None,render_device=None):
     from track2_judge.contract.profile import PROFILE,validate
     if bundle['contract'].get('scoring_profile')==PROFILE:validate(bundle['contract'])
     elif not allow_unapproved_diagnostics:raise RuntimeError("diagnostic profile explicit opt-in required")
@@ -301,4 +301,22 @@ def create_case_env(bundle,casebank,seed=0,solver=(30,4),*,allow_unapproved_diag
                 builder.set_initial_pose(sapien.Pose(pos));support=builder.build_static(name=name)
                 self.spatial_actors[name]=support;self.metadata[name]={'pivot_m':[0,0,0]}
         def _initialize_episode(self,env_idx,options):self.agent.reset(np.array(bundle.get('initial_robot_qpos',REST),dtype=np.float32))
-    return CaseEnv(num_envs=1,robot_uids=PiperPrototype.uid,control_mode='pd_joint_pos',sim_backend='cpu',render_backend='none' if diagnostic_camera is None else 'sapien_cuda:0',obs_mode='none',reward_mode='none',sim_config={'sim_freq':240,'control_freq':20},enhanced_determinism=True)
+    # ★ 2026-10-19 并行化（八卡）修复：渲染设备**显式传**，不靠进程级环境变量。
+    #
+    #   以前写死 `'sapien_cuda:0'` —— ManiSkill 把它解析成
+    #   `sapien.Device("cuda:0")`，而 `cuda:0` 是「`CUDA_VISIBLE_DEVICES` 里的
+    #   第 0 个」，且 **SAPIEN 的设备枚举在进程早期就被缓存**。多 worker 并发时
+    #   改环境变量不生效/不稳定 ⇒ `RuntimeError: failed to find device "cuda:0"`
+    #   ⇒ 建场景失败 ⇒ `GT_OR_INITIALIZATION_EXCEPTION_FlowError`（整 case 0 episode）。
+    #
+    #   `render_device` 给的是**完整 backend 串**（如 `"sapien_cuda:3"` 或
+    #   `"cuda:3"`），ManiSkill 的 `parse_backend_device_id` 会解析出
+    #   `render_device_id=3` ⇒ `sapien.Device("cuda:3")` —— 显式、无歧义、
+    #   不依赖环境变量。**并行时必须传**；串行不传时退回原行为。
+    if render_device is None:
+        render_device = 'sapien_cuda:0'
+    elif isinstance(render_device, int):
+        render_device = f'sapien_cuda:{render_device}'
+    elif render_device.isdigit():
+        render_device = f'sapien_cuda:{render_device}'
+    return CaseEnv(num_envs=1,robot_uids=PiperPrototype.uid,control_mode='pd_joint_pos',sim_backend='cpu',render_backend='none' if diagnostic_camera is None else render_device,obs_mode='none',reward_mode='none',sim_config={'sim_freq':240,'control_freq':20},enhanced_determinism=True)

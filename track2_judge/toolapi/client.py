@@ -79,7 +79,8 @@ _SUCCEEDED_RESULT_STATUS = "succeeded"
 __all__ = ["ToolClient", "HttpTransport", "InProcessTransport", "SandboxBridge",
            "EpisodeTools", "build_episode_tools",
            "is_terminal_phase", "action_outcome", "query_payload",
-           "ToolCallError", "ActionTimeout", "ActionStoppedUnknown"]
+           "ToolCallError", "ActionTimeout", "ActionStoppedUnknown",
+           "ActionRejected"]
 
 
 class ToolCallError(RuntimeError):
@@ -110,6 +111,22 @@ class ActionStoppedUnknown(ActionTimeout):
     这个是「跑到一半、不知道物理上停没停」—— 后者更严重，
     调用方必须把它归到超时并按超时处置，**不能重试**。
     """
+
+
+class ActionRejected(ToolCallError):
+    """**选手下发的动作参数不合法**（★ 2026-10-19）。
+
+    例：`target slew exceeded`（步间超限幅）/ `outside Piper limits`（超限位）/
+    `needs at least 8 item(s)`（chunk 太短）/ `not declared for this profile`。
+
+    ⚠️ **与链路故障严格区分**：这些是**选手的错**，必须归**可评分**的
+    `skill_error`（照常按物理终态判分），**不是** `infrastructure_timeout`。
+    以前它们统统是 `ToolCallError` → `INFRASTRUCTURE_ERRORS` → 整 case BLOCKED，
+    把「选手写错了」误报成「基础设施坏了」——既丢分又误导选手。
+
+    与 `ControlBudgetExhausted` 同一模式（都是从 `ToolCallError` 里剥出可评分的一支）。
+    """
+    code = "TRACK2_ACTION_REJECTED"
 
 
 class Transport(Protocol):
@@ -259,7 +276,7 @@ class ToolClient:
         status, body = self._transport.invoke_query(
             "track2.env", "observe", {"arguments": dict(kwargs)})
         if status != 200 or not body.get("ok"):
-            raise ToolCallError(_error_text(body, status))
+            _raise_invoke_failure(body, status)
         return query_payload(body["data"])
 
     # ── Action（对外仍是「调用即返回」）
@@ -309,7 +326,7 @@ class ToolClient:
             status, body = self._transport.invoke_query(
                 endpoint_id, operation, {"arguments": arguments or {}})
             if status != 200 or not body.get("ok"):
-                raise ToolCallError(_error_text(body, status))
+                _raise_invoke_failure(body, status)
             return query_payload(body["data"])
         return self._run_action(tool_id, arguments or {})
 
@@ -324,7 +341,7 @@ class ToolClient:
             tool_id, {"arguments": arguments})
         if status != 202 or not body.get("ok"):
             # 429（并发已满）/ 400（schema）/ 403（未声明）都在这里。
-            raise ToolCallError(_error_text(body, status))
+            _raise_invoke_failure(body, status)
         invocation_id = body["data"]["invocation_id"]
         deadline = self._clock() + self.action_timeout_s
 
@@ -335,7 +352,7 @@ class ToolClient:
                 raise self._timeout(invocation_id)
             status, body = self._transport.action_status(invocation_id)
             if status != 200:
-                raise ToolCallError(_error_text(body, status))
+                _raise_invoke_failure(body, status)
             data = body["data"]
             if is_terminal_phase(data):
                 break
@@ -415,12 +432,34 @@ def _raise_action_failure(tool_id: str, outcome: str, error: dict) -> "Exception
     ★ F1（2026-10-18）：控制步预算用满 = **可评分**的 `budget_timeout`，
     不是链路故障。以前它和别的失败一样是 `ToolCallError` → `infrastructure_timeout`
     → **Gate BLOCKED**，把「正常把预算用满」误报成不可发布。
+
+    ★ 2026-10-19：**选手参数非法**同理 —— 归 `ActionRejected`（可评分
+    `skill_error`），不是链路故障。见 `ActionRejected` 的说明。
     """
     detail = error.get("message") or error.get("code") or "no detail"
-    if (error.get("code") == "TRACK2_CONTROL_BUDGET_EXHAUSTED"
+    code = error.get("code") or ""
+    if (code == "TRACK2_CONTROL_BUDGET_EXHAUSTED"
             or "control budget exhausted" in str(detail)):
         raise ControlBudgetExhausted(f"{tool_id} {outcome}: {detail}")
+    # ★ 选手参数非法（可评分）—— 铁律：与链路故障分开。
+    if code == "TRACK2_ACTION_REJECTED":
+        raise ActionRejected(f"{tool_id} {outcome}: {detail}")
     raise ToolCallError(f"{tool_id} {outcome}: {detail}")
+
+
+def _raise_invoke_failure(body: dict, status: int) -> "Exception":
+    """`invoke` / `status` 的非 200 应答 → 按**错误码**分类后抛出。
+
+    ★ 2026-10-19：`TRACK2_ACTION_REJECTED`（选手参数非法）必须与链路故障
+    分开 —— 归可评分的 `ActionRejected`，否则整 case 被 BLOCKED 且误导选手。
+    其余仍走 `ToolCallError`（历史行为不变）。
+    """
+    error = body.get("error") if isinstance(body.get("error"), dict) else {}
+    code = error.get("code") or body.get("code") or ""
+    text = _error_text(body, status)
+    if code == "TRACK2_ACTION_REJECTED":
+        raise ActionRejected(text)
+    raise ToolCallError(text)
 
 
 def _error_text(body: dict, status: int) -> str:
