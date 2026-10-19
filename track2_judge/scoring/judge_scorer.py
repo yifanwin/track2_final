@@ -4,7 +4,9 @@
 
 ```
 S_case = max(0, S_target − P_disturb)                    （0–100）
-S_target  = Σ_i w_i · T_i                                （任务完成度，0 或 [30,100]）
+S_target  = Σ_i w_i · T_i
+  T_i = 30 + 70·Q              若 P1 通过（进有效放置区）
+      = approach_max · φ       若 P1 未通过（★ 2026-10-19 接近度项，φ ∈ [0,1]）
 P_disturb = 70 · clip(Σ_j v_j · D_j, 0, 1)               （环境扰动处罚，[0,70]）
 ```
 
@@ -33,7 +35,8 @@ from __future__ import annotations
 
 import math
 
-__all__ = ["score_case", "score_target", "penalty_disturb", "clip", "constants_for_tier"]
+__all__ = ["score_case", "score_target", "penalty_disturb", "clip", "constants_for_tier",
+           "aabb_gap_m", "aabb_inside_gap_m", "approach_phi"]
 
 
 def clip(value: float, low: float = 0.0, high: float = 1.0) -> float:
@@ -46,6 +49,58 @@ def clip(value: float, low: float = 0.0, high: float = 1.0) -> float:
 
 
 # ── 目标物体（0–100）
+
+def aabb_gap_m(point, region_aabb_m) -> float:
+    """点（米）到轴对齐区域（米）的**轴对齐最短间距**：区内为 0，区外为欧氏距离。
+
+    与 P1 的 `whole_aabb` / `point` 成员判定**同一套几何**，
+    所以「`gap == 0`」与「P1 通过」是同一件事。
+    """
+    if point is None or region_aabb_m is None:
+        raise ValueError("point and region_aabb_m are required")
+    low, high = region_aabb_m
+    d2 = 0.0
+    for p, lo, hi in zip(point, low, high):
+        if p < lo:
+            d2 += (lo - p) ** 2
+        elif p > hi:
+            d2 += (p - hi) ** 2
+    return math.sqrt(d2)
+
+
+def aabb_inside_gap_m(object_aabb_m, region_aabb_m) -> float:
+    """物体 AABB（米）**完全落入**区域所需的最小位移（米）；已落入为 0。
+
+    与 P1 的 `whole_aabb` 成员判定同源：P1 通过 ⟺ 本函数返回 0。
+    比区域还大的轴无法满足 —— 按该轴的必要位移计（max），保守。
+    """
+    if object_aabb_m is None or region_aabb_m is None:
+        raise ValueError("object_aabb_m and region_aabb_m are required")
+    (b0, b1), (lo, hi) = object_aabb_m, region_aabb_m
+    d2 = 0.0
+    for a0, a1, l, h in zip(b0, b1, lo, hi):
+        need = 0.0
+        if a0 < l:
+            need = l - a0
+        if a1 > h:
+            need = max(need, a1 - h)
+        d2 += need ** 2
+    return math.sqrt(d2)
+
+
+def approach_phi(d_init_m: float, d_final_m: float) -> float:
+    """接近度 `φ ∈ [0,1]`：把目标物朝有效放置区推近的**相对比例**。
+
+    `φ = clip((d_init − d_final) / d_init, 0, 1)`
+
+    * `d_init == 0`（一开局就在区内）⇒ 返回 1
+    * 没动（`d_final == d_init`）⇒ 0 ⇒ **不做 = 0 分**（保住原设计红线）
+    * 推得更远（`d_final > d_init`）⇒ clip 到 0（不惩罚、不给分）
+    """
+    if d_init_m <= 0.0:
+        return 1.0
+    return clip((d_init_m - d_final_m) / d_init_m)
+
 
 def _q_pose(d_pos_cm: float, d_rot_deg: float, tau_pos_cm: float, tau_rot_deg: float,
             alpha: float = 0.5) -> float:
@@ -64,13 +119,21 @@ def _q_pose(d_pos_cm: float, d_rot_deg: float, tau_pos_cm: float, tau_rot_deg: f
 
 def score_target(*, p1_passed: bool, weight: float, d_pos_cm: float, d_rot_deg: float,
                  tau_pos_cm: float, tau_rot_deg: float, alpha: float = 0.5,
-                 target_base: float = 30.0, target_span: float = 70.0) -> float:
+                 target_base: float = 30.0, target_span: float = 70.0,
+                 phi: float = 0.0, approach_max: float = 8.0) -> float:
     """单个目标物体的得分。
 
-    `p1_passed` 为假 ⇒ 0（硬门）；为真 ⇒ `target_base + target_span · Q`。
+    * `p1_passed` 为真 ⇒ `target_base + target_span · Q`（30–100，原口径不变）。
+    * `p1_passed` 为假 ⇒ **接近度分** `approach_max · φ`（0–`approach_max`，默认 8）。
+
+    `φ` 是「把目标物往有效放置区推近了多少」的相对比例（见 `approach_phi`）。
+    `φ` 缺省 0 ⇒ 与旧口径逐字一致（`p1_passed=False` ⇒ 0），
+    所以**只在调用方显式传入 φ 时**才启用接近度分。
     """
     if not p1_passed:
-        return 0.0
+        # ★ 2026-10-19 接近度项：给「接近但没进区域」的弱方法一点分。
+        #   红线不变：什么都没做 ⇒ φ=0 ⇒ 0 分（不会白拿分）。
+        return weight * float(approach_max) * clip(phi)
     q = _q_pose(d_pos_cm, d_rot_deg, tau_pos_cm, tau_rot_deg, alpha)
     return weight * (target_base + target_span * q)
 
@@ -144,6 +207,9 @@ def score_case(*, targets, displacements, constants: dict) -> dict:
         alpha=float(c.get("alpha", 0.5)),
         target_base=float(c.get("target_base", 30.0)),
         target_span=float(c.get("target_span", 70.0)),
+        # ★ 接近度项：`ti` 里没给 `phi` 就是 0（与旧口径逐字一致）。
+        phi=float(ti.get("phi", 0.0)),
+        approach_max=float(c.get("approach_max", 8.0)),
     ) for ti in targets)
     p = penalty_disturb(displacements=displacements, constants=c)
     return {"score_target": t, "penalty_disturb": p,
@@ -187,4 +253,7 @@ def constants_for_tier(tier: str) -> dict:
         "target_base": 30.0,
         "target_span": 70.0,
         "disturb_total": 70.0,
+        # ★ 接近度分上限（P1 未过时）。**远小于** 30 的入门档，
+        #   保证「接近」永远拿不到「进区域」的分。标定见 §接近度项。
+        "approach_max": 8.0,
     }

@@ -67,6 +67,9 @@ REQUIRED_TOOL_IDS: tuple[str, ...] = tuple(schema_mod.REQUIRED_TOOLS)
 # 裁判侧 Tool 的前缀。选手 manifest 里出现任何一个都直接拒。
 ADMIN_TOOL_PREFIX = "track2.admin."
 
+#: 必须有 —— 第一帧观测是用**选手自己的门禁**采的（见 `_validate_tool_profile`）。
+OBSERVE_TOOL_ID = schema_mod.TOOL_IDS[0] if schema_mod.TOOL_IDS else "track2.env.observe"
+
 #: 已从契约里删掉的字段 → 给选手的提示。出现即拒，**不静默忽略** ——
 #: 静默接受会让选手以为自己的声明生效了。
 REMOVED_FIELDS: dict[str, str] = {
@@ -151,6 +154,23 @@ def _validate_tool_profile(value: object, *, where: str) -> tuple[str, ...]:
             raise PlayerManifestError(
                 f"{where}: {tool_id!r} is not an official Tool. "
                 f"Available: {', '.join(REQUIRED_TOOL_IDS)}")
+    # ★ 2026-10-19：`track2.env.observe` **必须声明**。
+    #
+    #   喂进 `run(observation, tools)` 的第一帧，是 player 节点用**选手自己的
+    #   `tool_profile` 门禁**采的（`node.py` 的 `_initial_observation()` 走
+    #   `ProfileGatedBridge`）。没声明它 → 第一帧采不到 → 在**选手代码执行之前**
+    #   就失败，选手看到的现象是「什么都没跑就挂了」。
+    #
+    #   以前这个要求只写在给选手的文档里，漏了要跑到运行时才发现。现在提前到
+    #   **准入阶段**，并给出可操作的提示。见
+    #   `plan/Track2_字段语义统一_修复方案.md` §3。
+    if OBSERVE_TOOL_ID not in seen:
+        raise PlayerManifestError(
+            f"{where}: tool_profile must include {OBSERVE_TOOL_ID!r} — "
+            "the runner samples the FIRST observation (the `observation` "
+            "argument of run()) through your own declared tools, so a skill "
+            "that does not declare it fails before its code ever runs. "
+            f"Add it, e.g. {list(dict.fromkeys([OBSERVE_TOOL_ID, *sorted(seen)]))}.")
     # 按官方顺序规范化 —— 让集合比较与证据稳定
     return tuple(t for t in REQUIRED_TOOL_IDS if t in seen)
 

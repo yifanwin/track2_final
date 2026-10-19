@@ -384,8 +384,13 @@ class LocalGateway:
                         self._executor.step({"joint_position": list(item["joint_position"]),
                                              "gripper_opening_m": float(item["gripper_opening_m"])})
                         executed += 1
-                    raw = {"control_steps": executed,
-                           "sim_time_s": executed * self._executor._adapter.control_timestep,
+                    # ★ 2026-10-19 字段语义统一：`control_steps` 一律是
+                    #   **episode 累计**（与 `observe` 同义），不再返回本次增量。
+                    #   `executed_steps` 才是「这次真走了几步」。
+                    #   修前两者恒相等，等于同一件事写两遍、且与 observe 语义冲突。
+                    raw = {"control_steps": self._executor._adapter.control_steps,
+                           "sim_time_s": self._executor._adapter.control_steps
+                                         * self._executor._adapter.control_timestep,
                            "executed_steps": executed}
                 elif record.tool_id == "track2.robot.gripper_control":
                     raw = self._executor.gripper_step(record.arguments)

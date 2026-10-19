@@ -117,14 +117,32 @@ class TrustedContractExtension:
         strict=all(r['passed'] for r in results) and violations==0
         # ★ 2026-10-18 终态连续评分（新分；旧分 `s` 保留为 legacy diagnostic）。
         #   `P1` 是硬门（§3.5 红线：它仍在 `predicates[]` 里，Gate 照常检查）。
-        from track2_judge.scoring.judge_scorer import score_case, constants_for_tier
+        from track2_judge.scoring.judge_scorer import (score_case, constants_for_tier,
+                                                       aabb_gap_m, aabb_inside_gap_m, approach_phi)
         p1=[r for r in results if r['type']=='P1']
         p2r=[r for r in results if r['type']=='P2']
         p1_passed=bool(p1 and p1[0]['passed'])
         d_pos=float(p2r[0]['position_error_cm']) if p2r and 'position_error_cm' in p2r[0] else 0.0
         d_rot=float(p2r[0]['rotation_error_deg']) if p2r and 'rotation_error_deg' in p2r[0] else 0.0
+        # ★ 2026-10-19 接近度项：P1 未过时，按「目标物朝有效放置区推近了多少」给分。
+        #   `φ` 用的几何与 P1 **完全同源**（`spatial_objects` 的米制 canonical_root/aabb
+        #   对 `predicates[].region_aabb_m`），所以 `gap≈0` 与 `P1 通过` 等价。
+        phi=0.0
+        p1_pred=next((p for p in task['predicates'] if p['type']=='P1'),None)
+        if (not p1_passed) and p1_pred is not None:
+            try:
+                region=p1_pred['region_aabb_m'];obj=p1_pred['object'];mode=p1_pred['membership']
+                def _gap(state):
+                    sobj=state['spatial_objects'][obj]
+                    if mode=='whole_aabb':
+                        return aabb_inside_gap_m(sobj['aabb_world_m'],region)
+                    return aabb_gap_m(sobj['canonical_root_m'],region)
+                d_init=_gap(initial_state);d_final=_gap(final_state)
+                phi=approach_phi(d_init,d_final)
+            except (KeyError,TypeError,ValueError):
+                phi=0.0        # 几何缺失 ⇒ 不给接近度分（与旧口径一致，绝不误加分）
         continuous=score_case(
-            targets=[{'p1_passed':p1_passed,'weight':1.0,'d_pos_cm':d_pos,'d_rot_deg':d_rot}],
+            targets=[{'p1_passed':p1_passed,'weight':1.0,'d_pos_cm':d_pos,'d_rot_deg':d_rot,'phi':phi}],
             displacements=preserve,
             constants=constants_for_tier(task['tier']))
         return {'completion':completion,'s':score,'strict_success':strict,'success':strict,'status':'success' if strict else 'inconclusive' if any(r['status']=='inconclusive' for r in results) else 'failure',

@@ -136,6 +136,25 @@ class ManiSkillSimulatorAdapter:
         self.__require()
         return None if self.__previous is None else list(self.__previous)
 
+    @property
+    def control_steps(self):
+        """**episode 累计**推进的控制步数（从 `reset` 起算）。
+
+        ★ 2026-10-19：`control_steps` 这个字段名在三个入口上的语义**不一致**，
+        这条 q 是统一它们的基础设施。见 `docs/Track2_提交到评测_全链路架构与数据流.md`
+        的「字段语义」节与 `plan/Track2_字段语义统一_修复方案.md`。
+
+        | 入口 | 修前 | 修后 |
+        |---|---|---|
+        | `observe` | 累计 | 累计（不变） |
+        | `joint_trajectory` | **本次增量** | 累计 |
+        | `gripper_control` | 累计（走 `observe()`） | 累计（不变） |
+
+        选手侧不需要它 —— 它是给 gateway/adapter 内部把增量换算成累计用的。
+        """
+        self.__require()
+        return int(self.__steps)
+
     def assert_within_limits(self,raw,opening):
         """限位 + 形状 + 有限性。不通过抛 `ValueError`。"""
         self.__require()
@@ -320,10 +339,29 @@ class GatewayExecutor:
         return out
 
     def _as_action_result(self, raw):
-        return {
+        """把 adapter 的动作结果收窄成 **ToolSpec 声明的形状**。
+
+        ★ 2026-10-19 修正两处（都在 `plan/Track2_字段语义统一_修复方案.md`）：
+
+        1. **`control_steps` 一律是 episode 累计**（与 `observe` 同义）。
+           修前 `joint_trajectory` 返回本次增量、`gripper_control` 返回累计 ——
+           同一字段名两种语义，选手没法用它记账。
+        2. **按 ToolSpec 决定带不带 `executed_steps`**。
+           `joint_trajectory` 的 schema 声明了它、而 `gripper_control` 没有；
+           两个 spec 都是 `additionalProperties: false`，所以多带一个键
+           会被 `validate_output` **直接拒绝** —— 修前 `gripper_control`
+           的每次调用都会因此失败（踩到过真 bug，见 §「既有 bug」）。
+
+        这里按 `raw` 里**是否真的有**该键来带：adapter 的 gripper 路径
+        （`dispatch_public` → `step()` → `observe()`）本来就不产出它。
+        """
+        out = {
             "control_steps": int(raw.get("control_steps", 0)),
             "sim_time_s": float(raw.get("simulation_time_s", 0.0)),
         }
+        if raw.get("executed_steps") is not None:
+            out["executed_steps"] = int(raw["executed_steps"])
+        return out
 
 
 def _monotonic_s():
