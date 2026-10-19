@@ -88,10 +88,22 @@ def aabb_inside_gap_m(object_aabb_m, region_aabb_m) -> float:
     return math.sqrt(d2)
 
 
-def approach_phi(d_init_m: float, d_final_m: float) -> float:
+def approach_phi(d_init_m: float, d_final_m: float, ref_m: float = 0.0) -> float:
     """接近度 `φ ∈ [0,1]`：把目标物朝有效放置区推近的**相对比例**。
 
-    `φ = clip((d_init − d_final) / d_init, 0, 1)`
+    `φ = clip((d_init − d_final) / denom, 0, 1)`
+
+    * **`ref_m <= 0`（旧口径）**：`denom = d_init` —— 逐字兼容旧行为。
+    * **`ref_m > 0`（★ 2026-10-19 ②）**：`denom = min(d_init, ref_m)`。
+
+    **为什么要 `min(d_init, ref_m)`**：纯相对口径下，`d_init` 越大，同样
+    一段真实进展被稀释得越狠。实测 `d_init = 21.6 cm` 时推进 **6.4 cm**
+    只值 `φ = 0.30`（≈3 分），而同尺度的小案例里 6.4 cm 已接近满分 ——
+    对「起始距离远」的 case 系统性偏严。加固定尺度上限后，超过 `ref_m`
+    的 `d_init` 一律按 `ref_m` 归一，**真实进展的分不再随起始距离衰减**。
+
+    红线不变（见下），且**衔接不变**：推到区域边界 `d_final = 0 ⇒ φ = 1`
+    （与 `ref_m` 无关），正好接上 30 分入门档。
 
     * `d_init == 0`（一开局就在区内）⇒ 返回 1
     * 没动（`d_final == d_init`）⇒ 0 ⇒ **不做 = 0 分**（保住原设计红线）
@@ -99,7 +111,10 @@ def approach_phi(d_init_m: float, d_final_m: float) -> float:
     """
     if d_init_m <= 0.0:
         return 1.0
-    return clip((d_init_m - d_final_m) / d_init_m)
+    denom = d_init_m if ref_m <= 0.0 else min(d_init_m, float(ref_m))
+    if denom <= 0.0:
+        return 1.0
+    return clip((d_init_m - d_final_m) / denom)
 
 
 def _q_pose(d_pos_cm: float, d_rot_deg: float, tau_pos_cm: float, tau_rot_deg: float,
@@ -120,11 +135,11 @@ def _q_pose(d_pos_cm: float, d_rot_deg: float, tau_pos_cm: float, tau_rot_deg: f
 def score_target(*, p1_passed: bool, weight: float, d_pos_cm: float, d_rot_deg: float,
                  tau_pos_cm: float, tau_rot_deg: float, alpha: float = 0.5,
                  target_base: float = 30.0, target_span: float = 70.0,
-                 phi: float = 0.0, approach_max: float = 8.0) -> float:
+                 phi: float = 0.0, approach_max: float = 10.0) -> float:
     """单个目标物体的得分。
 
     * `p1_passed` 为真 ⇒ `target_base + target_span · Q`（30–100，原口径不变）。
-    * `p1_passed` 为假 ⇒ **接近度分** `approach_max · φ`（0–`approach_max`，默认 8）。
+    * `p1_passed` 为假 ⇒ **接近度分** `approach_max · φ`（0–`approach_max`，默认 10）。
 
     `φ` 是「把目标物往有效放置区推近了多少」的相对比例（见 `approach_phi`）。
     `φ` 缺省 0 ⇒ 与旧口径逐字一致（`p1_passed=False` ⇒ 0），
@@ -209,11 +224,15 @@ def score_case(*, targets, displacements, constants: dict) -> dict:
         target_span=float(c.get("target_span", 70.0)),
         # ★ 接近度项：`ti` 里没给 `phi` 就是 0（与旧口径逐字一致）。
         phi=float(ti.get("phi", 0.0)),
-        approach_max=float(c.get("approach_max", 8.0)),
+        approach_max=float(c.get("approach_max", 10.0)),
     ) for ti in targets)
     p = penalty_disturb(displacements=displacements, constants=c)
-    return {"score_target": t, "penalty_disturb": p,
-            "score_100": max(0.0, t - p)}
+    # ★ 2026-10-19 免赔额：`P_disturb` 的前 `disturb_franchise` 分不计。
+    #   这是给弱方法的出口 —— 摸索过程里的小磕碰不把接近分吃光。
+    #   `disturb_franchise=0` ⇒ 与旧口径逐字一致。
+    p_net = max(0.0, p - float(c.get("disturb_franchise", 0.0)))
+    return {"score_target": t, "penalty_disturb": p, "penalty_disturb_net": p_net,
+            "score_100": max(0.0, t - p_net)}
 
 
 def constants_for_tier(tier: str) -> dict:
@@ -254,6 +273,17 @@ def constants_for_tier(tier: str) -> dict:
         "target_span": 70.0,
         "disturb_total": 70.0,
         # ★ 接近度分上限（P1 未过时）。**远小于** 30 的入门档，
-        #   保证「接近」永远拿不到「进区域」的分。标定见 §接近度项。
-        "approach_max": 8.0,
+        #   保证「接近」永远拿不到「进区域」的分。
+        #   2026-10-19 ②：8 → 10（用户口径：弱方法上限 10 分）。
+        "approach_max": 10.0,
+        # ★ 2026-10-19 ② 接近度归一尺度上限（米）。
+        #   `approach_phi` 的分母取 `min(d_init, approach_ref_m)`：
+        #   起始距离超过 10 cm 的 case 一律按 10 cm 归一，
+        #   避免「起始远」的 case 把同样的真实进展稀释掉（实测 21.6 cm
+        #   起始时推进 6.4 cm 只值 φ=0.30）。`0` ⇒ 退回纯相对口径。
+        "approach_ref_m": 0.10,
+        # ★ 2026-10-19 ③ 扰动免赔额：`P_disturb` 的前几分不计。
+        #   给弱方法的出路 —— 「摸索过程里的小磕碰」不再把接近分吃光。
+        #   在 0–70 的扰动尺度上取值；`0` ⇒ 与旧口径逐字一致。
+        "disturb_franchise": 5.0,
     }

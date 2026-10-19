@@ -87,14 +87,19 @@ class PersistentFlow:
     """一个常驻 dora flow 的生命周期 + 两个私有端点。"""
 
     def __init__(self, *, bundle_root, physics_root, python, log_path,
-                 gateway_port=19110, control_port=None, runtime_gpu="0",
+                 gateway_port=None, control_port=None, runtime_gpu="0",
                  work_dir=None, env=None, token=None, name=None,
                  player_package=None, camera=True, oracle_planning=False):
         self.bundle_root = Path(bundle_root).resolve()
         self.physics_root = Path(physics_root).resolve()
         self.python = str(python)
         self.log_path = Path(log_path)
-        self.gateway_port = int(gateway_port)
+        # ★ 2026-10-19 并行化：端口默认**从本 worker 的 `gateway.yaml` 读**
+        #   （单一真源）。以前这里写死 `19110`，而 `resident_runner` 又不传 ——
+        #   于是 8 路并行时：worker bundle 的 `gateway.yaml` 已改成 19120，
+        #   但**客户端仍连 19110**，gateway 永远等不到。读 profile 就自动跟随。
+        self.gateway_port = int(gateway_port) if gateway_port is not None \
+            else self._read_gateway_port()
         self.control_port = int(control_port or free_port())
         self.runtime_gpu = str(runtime_gpu)
         #: 要不要建相机（G3）。**渲染进 `runtime.yaml` 的 `camera_required`** ——
@@ -117,6 +122,23 @@ class PersistentFlow:
         self._cli_rc: int | None = None
 
     # ── 起 / 停
+
+    def _read_gateway_port(self) -> int:
+        """从本 worker 的 `profiles/sim/gateway.yaml` 读 `port:`。
+
+        ⚠️ **不要退回写死值** —— 那是并行化前的 bug 源：端口在 yaml 里，
+        客户端却用常量。读不到就**明确报错**（比连错端口好查）。
+        """
+        import re
+        path = self.bundle_root / "profiles" / "sim" / "gateway.yaml"
+        try:
+            text = path.read_text(encoding="utf8")
+        except OSError as exc:
+            raise RuntimeError(f"读不到 gateway.yaml: {path} ({exc})") from exc
+        m = re.search(r"^port:\s*(\d+)\s*$", text, flags=re.MULTILINE)
+        if not m:
+            raise RuntimeError(f"gateway.yaml 里没有 `port:` 行: {path}")
+        return int(m.group(1))
 
     def _flow_yaml(self) -> Path:
         """生成 flow YAML（把两个 `${...}` 替掉）。
@@ -186,6 +208,20 @@ class PersistentFlow:
             rendered = _set_yaml_scalar(
                 rendered, "camera_required",
                 "true" if self.camera else "false")
+            # ★ 2026-10-19 并行化（八卡）：渲染本 worker 的**渲染 GPU 卡号**。
+            #
+            #   为什么走文件而不是环境变量：与上面两条同因 —— `--detach` 下
+            #   节点由长命 daemon spawn，daemon 环境里 **0 个 `TRACK2*`**
+            #   （实测 `/proc/<daemon>/environ`）。`TRACK2_RENDER_GPU` 虽然被
+            #   塞进了 `dora start` 的 env，但**到不了节点**（实测节点
+            #   environ 里没有它）。渲染进 `runtime.yaml` 才一定到得了。
+            #
+            #   节点侧用它设 `CUDA_VISIBLE_DEVICES`，让写死的
+            #   `render_backend='sapien_cuda:0'` 落在**本 worker 的卡**上。
+            #   串行时 `runtime_gpu` 默认 "0"，行为与旧版一致。
+            rendered = _set_yaml_scalar(
+                rendered, "render_gpu", str(self.runtime_gpu),
+                add_if_missing=True)
             if self.oracle_planning:
                 # G2：只有显式开启时才让 runtime 具备 GT 规划能力。
                 rendered = _set_yaml_scalar(
@@ -337,31 +373,42 @@ class PersistentFlow:
             pass
 
     def _kill_stragglers(self, *, settle_s: float = 2.0) -> list[str]:
-        """按**节点模块名**收残留（F18 的教训）。
+        """按**节点模块名**收残留（F18 的教训），并**只收本 worker 的**。
 
         `run_runtime.sh` / `run_player.sh` 都以 `exec python -u -m ...` 结尾，
         argv 早被 exec 换掉 —— 所以 `pkill -f run_runtime.sh` 是空操作。
         必须按 `-m track2_*` 匹配。
+
+        ## ★ 2026-10-19 并行化修复：**必须按 worker 过滤**
+
+        裸 `pgrep -f` 是**全局**匹配 —— 8 路并行时，任一 worker 调 `stop()`
+        会把**其他 7 路**的 player/runtime 节点一起 SIGKILL。表现是「随机的
+        case 莫名其妙失败」，极难定位。
+
+        过滤依据用 **`TRACK2_PROFILE_DIR`**（每 worker 的 Bundle profile 目录
+        不同 ⇒ 天然唯一）。它由 `_node_env()` 注入到每个节点进程，
+        比控制口端口更稳（端口只在 `start.sh` 注入路径上存在，
+        而 `TRACK2_PROFILE_DIR` 在所有节点进程的 `/proc/<pid>/environ` 里）。
+
+        读不到 environ（进程已退 / 权限）时**跳过该 pid**，不误杀。
         """
         import signal
         patterns = ("python -u -m track2_player_node",
                     "python -u -m track2_maniskill_runtime")
-        found: list[str] = []
-        for pattern in patterns:
+        want = str(self.bundle_root / "profiles" / "sim")
+
+        def _mine(pid_text: str) -> bool:
             try:
-                listing = subprocess.run(["pgrep", "-f", pattern],
-                                         capture_output=True, text=True,
-                                         timeout=10).stdout.split()
-            except (OSError, subprocess.TimeoutExpired):
-                continue
-            for pid_text in listing:
-                try:
-                    os.kill(int(pid_text), signal.SIGTERM)
-                    found.append(f"{pattern}:{pid_text}")
-                except (ProcessLookupError, PermissionError, ValueError):
-                    continue
-        if found:
-            time.sleep(settle_s)
+                blob = Path(f"/proc/{int(pid_text)}/environ").read_bytes()
+            except (OSError, ValueError):
+                return False        # 读不到 ⇒ 不是我能确定的，跳过（不误杀）
+            for entry in blob.split(b"\0"):
+                if entry.startswith(b"TRACK2_PROFILE_DIR="):
+                    return entry.split(b"=", 1)[1].decode("utf-8", "replace") == want
+            return False
+
+        def _collect() -> list[int]:
+            out: list[int] = []
             for pattern in patterns:
                 try:
                     listing = subprocess.run(["pgrep", "-f", pattern],
@@ -369,11 +416,23 @@ class PersistentFlow:
                                              timeout=10).stdout.split()
                 except (OSError, subprocess.TimeoutExpired):
                     continue
-                for pid_text in listing:
-                    try:
-                        os.kill(int(pid_text), signal.SIGKILL)
-                    except (ProcessLookupError, PermissionError, ValueError):
-                        continue
+                out.extend(int(t) for t in listing if t.isdigit() and _mine(t))
+            return out
+
+        found: list[str] = []
+        for pid in _collect():
+            try:
+                os.kill(pid, signal.SIGTERM)
+                found.append(f"{want}:{pid}")
+            except (ProcessLookupError, PermissionError, ValueError):
+                continue
+        if found:
+            time.sleep(settle_s)
+            for pid in _collect():
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, ValueError):
+                    continue
         return found
 
     # ── 私有端点（B1 / B2）

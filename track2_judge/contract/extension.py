@@ -129,6 +129,7 @@ class TrustedContractExtension:
         #   对 `predicates[].region_aabb_m`），所以 `gap≈0` 与 `P1 通过` 等价。
         phi=0.0
         p1_pred=next((p for p in task['predicates'] if p['type']=='P1'),None)
+        tier_constants=constants_for_tier(task['tier'])
         if (not p1_passed) and p1_pred is not None:
             try:
                 region=p1_pred['region_aabb_m'];obj=p1_pred['object'];mode=p1_pred['membership']
@@ -138,13 +139,15 @@ class TrustedContractExtension:
                         return aabb_inside_gap_m(sobj['aabb_world_m'],region)
                     return aabb_gap_m(sobj['canonical_root_m'],region)
                 d_init=_gap(initial_state);d_final=_gap(final_state)
-                phi=approach_phi(d_init,d_final)
+                # ★ 2026-10-19 ②：传给归一尺度上限（米）—— 起始距离超过它时
+                #   按它归一，避免「起始远」的 case 把真实进展稀释掉。
+                phi=approach_phi(d_init,d_final,ref_m=float(tier_constants.get("approach_ref_m",0.0)))
             except (KeyError,TypeError,ValueError):
                 phi=0.0        # 几何缺失 ⇒ 不给接近度分（与旧口径一致，绝不误加分）
         continuous=score_case(
             targets=[{'p1_passed':p1_passed,'weight':1.0,'d_pos_cm':d_pos,'d_rot_deg':d_rot,'phi':phi}],
             displacements=preserve,
-            constants=constants_for_tier(task['tier']))
+            constants=tier_constants)
         return {'completion':completion,'s':score,'strict_success':strict,'success':strict,'status':'success' if strict else 'inconclusive' if any(r['status']=='inconclusive' for r in results) else 'failure',
                 'predicates':results,'violation_count':violations,'constraints':constraint_details,'P5':p5,
                 'preserve_displacements':preserve,

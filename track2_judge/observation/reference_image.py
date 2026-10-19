@@ -123,7 +123,22 @@ def render_reference_image(bundle: dict, casebank, *, seed: int = 0) -> dict:
     )
 
     planned = goal_bundle(bundle, seed=seed)
-    camera_spec = fixed_camera_from_bundle(planned, 0)
+    # ★ 2026-10-19 修复：机位必须与实时帧**同源**（都用**初始布局**）。
+    #
+    #   之前这里传的是 `planned` —— `render_reference_image` 把
+    #   `initial_layouts` 换成了 `target_layout` 再算机位，而实时帧走
+    #   `build_case_session()` → `fixed_camera_from_bundle(bundle, 0)`
+    #   用的是**初始布局**。`fixed_camera_from_bundle` 从布局点云现算
+    #   `aim`/`distance`，两种布局的点云不同 ⇒ **参考图与实时帧机位不同**。
+    #   实测 50 例：相机中心偏移中位 3.1 cm / 最大 8.7 cm，摄距差最大
+    #   11.7 cm（004）。而 `fixed_camera_from_bundle` 的 docstring 明写
+    #   「参考图与实时帧用同一个规格，选手才能把两者对比」—— 实现违反了它。
+    #
+    #   ⚠️ 「画面内容」与「机位」必须**分开取**：
+    #     * 内容 = `planned`（目标布局）—— 必须，否则参考图就不是「目标摆位」；
+    #     * 机位 = `bundle`（初始布局）—— 必须，否则等于把答案编码进观测
+    #       （docstring 硬约束 1），且与实时帧不同机位（选手没法对比）。
+    camera_spec = fixed_camera_from_bundle(bundle, 0)
 
     env = None
     try:
