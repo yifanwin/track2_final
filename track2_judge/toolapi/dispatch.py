@@ -155,7 +155,15 @@ class ManiSkillSimulatorAdapter:
         # Conservative internal command slew budget, below URDF 5 rad/s, 3m/s.
         # 步间限幅 = 1.0 rad/s × dt(=1/20 s) = **0.05 rad/步**（臂）；
         # 夹爪 0.12 m/s × dt = 0.006 m/步。
-        if np.any(np.abs(target-np.asarray(previous,dtype=float))>np.r_[[1.]*6,.12]*dt+1e-7):raise ValueError('target slew exceeded')
+        if np.any(np.abs(target-np.asarray(previous,dtype=float))>np.r_[[1.]*6,.12]*dt+1e-7):
+            import sys as _s
+            _d=np.abs(target-np.asarray(previous,dtype=float)); _l=np.r_[[1.]*6,.12]*dt
+            print("[track2-slew] dims=%s diff=%s lim=%s prev=%s tgt=%s"%(
+                [int(i) for i in np.where(_d>_l+1e-7)[0]],
+                np.round(_d,4).tolist(), np.round(_l,4).tolist(),
+                np.round(np.asarray(previous,dtype=float),4).tolist(), np.round(target,4).tolist()),
+                file=_s.stderr, flush=True)
+            raise ValueError('target slew exceeded')
         return q,g
 
     def assert_budget_allows(self,count=1):

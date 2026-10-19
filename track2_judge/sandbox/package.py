@@ -86,12 +86,21 @@ class PackageExecutor:
                 if type(msg['tool']) is not str or type(msg['arguments']) is not dict:raise ValueError('malformed package tool')
                 name=msg['tool'];payload=msg['arguments']
                 # Same ToolClient lifecycle; legacy object teleport calls stay forbidden.
+                # ★ 2026-10-19 修：`observe` 的 payload 是**关键字参数**（如 `include_rgb`），
+                #   不是「非法参数」。ToolSpec 里 `observe` 本就声明了 `include_rgb`
+                #   （`schema.py`），`package_host.ToolClient.observe(**kwargs)` 与
+                #   `SandboxBridge` 也都按 kwargs 透传 —— 只有这里曾硬拒任何 payload，
+                #   导致**照文档写 `tools.observe(include_rgb=True)` 的合规提交被判
+                #   `ValueError: observe has no arguments` → 整 case BLOCKED**。
+                #   （评测器自带的 skill/测试都调无参 `observe()`，所以一直没暴露。）
                 if name=='observe':
-                    if payload:raise ValueError('observe has no arguments')
-                    payload=None
+                    payload=payload or {}
                 service_start=time.monotonic()
                 try:result=dispatch(name,payload)
-                except Exception:
+                except Exception as _exc:
+                    import sys as _sys
+                    print(f"[track2-package] tool {name!r} rejected: "
+                          f"{type(_exc).__name__}: {_exc}", file=_sys.stderr, flush=True)
                     self.process.send({'type':'tool_result','ok':False,'error':'tool request rejected'})
                     raise
                 finally:
