@@ -23,7 +23,7 @@ CASEBANK = Path(__file__).resolve().parents[2] / "judge_private" / "casebank"
 #: `2casefix` 的只读证据源（红线）。
 REFERENCE_ROOT = Path(__file__).resolve().parents[2] / "judge_private" / "reference_images"
 CASE_INDEX = CASEBANK / "cases.json"
-EXPECTED_CASES = 50
+EXPECTED_CASES = 30
 MAX_CASE_BYTES = 8 * 1024 ** 2
 CASE_ID_RE = re.compile('[A-Za-z0-9_-]{1,100}')
 
@@ -32,7 +32,7 @@ def check_casebank(bank=CASEBANK):
     """五条结构性检查，全部与版本无关（无哈希）。
 
     1. CASEBANK 存在、属主是裁判、mode & 0o077 == 0
-    2. cases.json 列出恰好 73 个互不重复的 case_id
+    2. cases.json 列出恰好 EXPECTED_CASES 个互不重复的 case_id
     3. 每个 cases/<case_id>/case.json 存在、≤8 MiB、不是符号链接
     4. 所有 hull 路径包含在 CASEBANK 内且不是符号链接（防路径穿越）
     5. 每例的 contract 通过 TrustedContractExtension.validate_task（schema 合法）
@@ -45,7 +45,7 @@ def check_casebank(bank=CASEBANK):
     index = json.loads((bank / 'cases.json').read_text(encoding='utf8'))
     ids = index.get('case_ids') if isinstance(index, dict) else None
     if not isinstance(ids, list) or len(ids) != EXPECTED_CASES:
-        raise ValueError('casebank index is not a complete 73-case list')
+        raise ValueError(f'casebank index is not a complete {EXPECTED_CASES}-case list')
     if len(set(ids)) != EXPECTED_CASES:
         raise ValueError('casebank index has duplicate case ids')
     engine = None

@@ -47,7 +47,8 @@ DEFAULT_MAX_STEPS = 400
 DEFAULT_MAX_SIM_TIME_S = 20.0
 
 
-def camera_closure(spec: dict, *, gpu_env: str = "TRACK2_RENDER_GPU"):
+def camera_closure(spec: dict, *, gpu_env: str = "TRACK2_RENDER_GPU",
+                   camera_uid: str = "diagnostic_public_rgb"):
     """按 `fixed_camera_from_bundle()` 的规格造一个「取一帧」的回调。
 
     它被 `ObservationProvider` 每次 `observe()` 调用（`live=True` 时），
@@ -61,7 +62,7 @@ def camera_closure(spec: dict, *, gpu_env: str = "TRACK2_RENDER_GPU"):
 
     def grab(env) -> Any:
         env.scene.update_render()
-        cam = env._human_render_cameras["diagnostic_public_rgb"]
+        cam = env._human_render_cameras[camera_uid]
         cam.capture()
         rgb = cam.camera._render_cameras[0].get_picture("Color")
         if rgb.dtype != np.uint8:
@@ -126,7 +127,7 @@ def build_case_session(bundle: dict, casebank, seed: int, *,
     """造一个 case 的完整会话。**两侧（判官 / PAOS）都调它。**
 
     参数：
-        camera         要不要建相机。**正式评测 True，CPU 回归 False。**
+        camera         同时启用固定与腕部 RGB。正式评测 True，CPU 回归 False。
         public_fields  选手可见的字段集合（决定 `ObservationProvider` 的白名单）
         live           每步重拍（模式 B 下恒为 True；CPU 回归可为 False）
         camera_spec    省略时按 `fixed_camera_from_bundle(bundle, seed)` 算
@@ -141,6 +142,9 @@ def build_case_session(bundle: dict, casebank, seed: int, *,
     from track2_judge.scenario.prototype_env import SETTINGS
     from track2_judge.toolapi.dispatch import ManiSkillSimulatorAdapter
 
+    # Both formal entrypoints share this switch: enabled RGB always includes
+    # fixed and wrist views. Do not depend on the long-lived Dora daemon env.
+    wrist_camera = bool(camera)
     if camera and camera_spec is None:
         camera_spec = fixed_camera_from_bundle(bundle, seed if False else 0)
         # ⚠️ 固定用 seed 0：机位只依赖初始布局，`_fit_distance` 对 5 个 seed
@@ -155,7 +159,8 @@ def build_case_session(bundle: dict, casebank, seed: int, *,
             lambda: create_case_env(bundle, casebank, seed,
                                     allow_unapproved_diagnostics=allow_unapproved_diagnostics,
                                     diagnostic_camera=camera_spec,
-                                    render_device=render_device),
+                                    render_device=render_device,
+                                    wrist_camera=wrist_camera),
             snapshot=physical_snapshot,
             spatial_provider=spatial_snapshot,
             metadata={n: {"pivot_m": [0, 0, 0]} for n in bundle["objects"]},
@@ -165,6 +170,8 @@ def build_case_session(bundle: dict, casebank, seed: int, *,
                 approved_fields=tuple(public_fields),
                 camera=camera_closure(camera_spec) if camera_spec is not None else None,
                 camera_required=bool(camera),
+                wrist_camera=(camera_closure(camera_spec, camera_uid="public_wrist_rgb")
+                              if wrist_camera else None),
                 live=bool(live) and camera_spec is not None),
             checkpoints=list(checkpoints or []),
             recovery=bool(recovery),

@@ -83,7 +83,7 @@ _OBSERVE = {
     "operation": "observe",
     "semantics": "query",
     "description": "Read the approved current observation: robot proprioception, control clock, and "
-                   "the policy camera frame when RGB is requested.",
+                   "fixed and wrist RGB camera frames when RGB is requested.",
     "input_schema": {
         "type": "object",
         "additionalProperties": False,
@@ -135,6 +135,8 @@ _OBSERVE = {
                 "properties": {
                     "camera": _PNG_IMAGE,
                     "camera_status": {"type": "string"},
+                    "wrist_camera": _PNG_IMAGE,
+                    "wrist_camera_status": {"type": "string"},
                 },
             },
         },

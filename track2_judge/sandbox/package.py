@@ -75,7 +75,7 @@ class PackageExecutor:
         if result!={'type':'init_result','result':{'ok':True}}:raise RuntimeError('Skill initialization failed')
         self.lifecycle.append('initialize')
     def run(self,observation,dispatch,timeout_s=10,max_requests=2400):
-        self.process.send({'type':'run','observation':observation});deadline=time.monotonic()+timeout_s;count=0;hard_deadline=time.monotonic()+max(360,timeout_s)
+        self.process.send({'type':'run','observation':observation});deadline=time.monotonic()+timeout_s;count=0;hard_deadline=time.monotonic()+600
         while True:
             remaining=min(deadline,hard_deadline)-time.monotonic()
             if remaining<=0:raise BudgetTimeout('package deadline')

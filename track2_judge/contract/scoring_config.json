@@ -2,7 +2,7 @@
   "profile": "track2-ttg73-author-pdf-final-state-v1",
   "source_document": "指标细化（出题人版）.pdf",
   "source_document_sha256": "db2b9ec7b92b02cfd19130f9ea94effb3544eaf8add83137030dce8b2f18760d",
-  "case_count": 73,
+  "case_count": 30,
   "task_type": "pick_place",
   "predicates": [
     "P1",

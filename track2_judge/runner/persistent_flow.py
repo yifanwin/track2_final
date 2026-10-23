@@ -153,6 +153,18 @@ class PersistentFlow:
         rendered = (source
                     .replace("${PAOS_SKILL_ROOT}", str(self.bundle_root))
                     .replace("${FORGE_RUNTIME_BIN}", str(gateway_bin.parent)))
+        # The detached Dora daemon does not inherit this launcher's environment.
+        # Bind interpreter/physics paths on the nodes themselves, as PAOS's
+        # SkillEnvironmentBuilder does. This also supports installed bundles,
+        # whose parent directory does not contain toolenv or track2_final.
+        import yaml
+        flow = yaml.safe_load(rendered)
+        for node in flow["nodes"]:
+            if node.get("id") in ("runtime", "player"):
+                node["env"] = {**(node.get("env") or {}),
+                               "TRACK2_PYTHON": self.python,
+                               "TRACK2_PHYSICS_ROOT": str(self.physics_root)}
+        rendered = yaml.safe_dump(flow, sort_keys=False, allow_unicode=True)
         target = profile / ".resident_flow.yaml"
         target.write_text(rendered, encoding="utf8")
         return target

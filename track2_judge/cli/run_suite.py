@@ -1,4 +1,4 @@
-"""跑完 50 例的私有彩排；无队列、无回调、无选手数据。
+"""跑完 30 例的私有彩排；无队列、无回调、无选手数据。
 
 单一权威 casebank（无 --casebank / --freeze-manifest 参数）。
 
@@ -10,7 +10,7 @@
 
 `--workers N`（默认 1 = 串行，保持旧行为）：把 case 分给 N 个并发 worker，
 每个 worker 用**独立的 Bundle profile**（`track2_official_runtime_workers/w<k>/`，
-端口 19110+10k，GPU k）。50 例从 2.5 h 降到 ~20 min。
+端口 19110+10k，GPU k）。各 worker 从当前 casebank 清单领取任务。
 
 * 并发**只发生在执行侧** —— 每个 case 仍是一个独立 `release_entry` 子进程。
 * 越界（`w >= 可用 worker 数`）会**明确报错**，不静默退化。
@@ -53,7 +53,7 @@ p.add_argument('--gpus', default=None,
                help='并行用的物理 GPU 列表（逗号分隔）。默认 0,1,2,…（=worker 号）')
 # 分阶段验证用：只跑前 N 个 case（正式评测不要带）。
 p.add_argument('--limit', type=int, default=None,
-               help='只跑前 N 个 case（分阶段验证用）。默认全 50')
+               help='只跑前 N 个 case（分阶段验证用）。默认全 30')
 a = p.parse_args()
 os.umask(0o077)
 out = Path(a.output).resolve()
@@ -199,7 +199,7 @@ def _write_summary() -> None:
     summary = {'status': 'PASS' if len(good) == n_cases else 'RUNNING' if len(done) < n_cases else 'FAIL',
                'case_count': n_cases, 'completed_cases': len(done), 'pass_cases': len(good),
                'fail_cases': len(done) - len(good), 'episodes': sum(x['episodes'] for x in done),
-               # ★ 总分 = 各 case **等权平均**（每 case 满分 2 分 = 100/n_cases）。
+               # ★ 总分 = 各 case **等权平均**（每 case 权重 = 1/n_cases）。
                'score_100': (sum(x['score_100'] for x in good) / n_cases
                              if len(good) == n_cases and all(x['score_100'] is not None for x in good)
                              else None),

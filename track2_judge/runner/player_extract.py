@@ -14,7 +14,7 @@ Q18 定的是「官方镜像提供依赖，选手**只带权重**」。所以 `m
 | 区 | 条目数上限 | 总字节上限 | 单文件上限 | 压缩比检查 |
 |---|---|---|---|---|
 | 代码区（`model/` 之外） | 200 | 20 MiB | 5 MiB | ≤ 200:1 |
-| `model/` 区 | 2000 | 2 GiB | 2 GiB | **不查**（权重本就不可压） |
+| `model/` 区 | 2000 | 8 GiB | 8 GiB | **不查**（权重本就不可压） |
 
 `model/` 里放 Python 依赖**是可以的**（不禁止），但官方规则建议只放权重；
 依赖版本一致性由官方镜像负责（Q18）。这里不做「必须只有权重」的强判 ——
@@ -47,8 +47,8 @@ CODE_SINGLE_FILE_MAX_BYTES = 5 * 1024 ** 2
 CODE_MAX_RATIO = 200
 
 MODEL_MAX_ENTRIES = 2000
-MODEL_MAX_TOTAL_BYTES = 2 * 1024 ** 3
-MODEL_SINGLE_FILE_MAX_BYTES = 2 * 1024 ** 3
+MODEL_MAX_TOTAL_BYTES = 8 * 1024 ** 3
+MODEL_SINGLE_FILE_MAX_BYTES = 8 * 1024 ** 3
 
 _MANIFEST_NAME = "manifest.json"
 _READ_BLOCK = 1 << 20

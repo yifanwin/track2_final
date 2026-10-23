@@ -112,13 +112,14 @@ class ManiSkillSimulatorAdapter:
                 self.__health_recorder.sample(health_state,command=self.__command)
             self.__env._after_simulation_step=after_step
         return self.observe()
-    def observe(self):
+    def observe(self, *, include_rgb=True):
         self.__require()
         # CPU/headless prototype exposes proprioception and explicitly approved
         # task inputs only. No object GT or mutable simulator object escapes.
         result=plain({'robot':{'joint_position':array(self.__env.agent.robot.get_qpos()),'joint_velocity':array(self.__env.agent.robot.get_qvel()),'tcp_position_m':array(self.__env.agent.tcp.pose.p),'tcp_quaternion_wxyz':array(self.__env.agent.tcp.pose.q)},'task_inputs':copy.deepcopy(self.__inputs),'control_steps':self.__steps,'simulation_time_s':self.__steps*self.__env.control_timestep})
         result['robot']['joint_limits_rad']=array(self.__env.agent.robot.get_qlimits()).reshape(-1,2)[:6].tolist()
-        if self.__observation_provider is not None:result.update(self.__observation_provider.observation())
+        if include_rgb and self.__observation_provider is not None:
+            result.update(self.__observation_provider.observation())
         return result
     # ── 只读件（chunk 的预校验复用它们，避免两份逻辑漂移）
     #
@@ -208,7 +209,11 @@ class ManiSkillSimulatorAdapter:
         self.__command={'joint_position':q.tolist(),'gripper_opening_m':g}
         try:
             self.__env.step(np.r_[q,g/2,-g/2].astype(np.float32))
-            self.__steps+=1;self.__previous=target.copy();return self.observe()
+            self.__steps+=1;self.__previous=target.copy()
+            # Action responses never expose RGB. Rendering both cameras on each
+            # internal control step wastes the action deadline (25x per chunk).
+            # The next explicit observe captures the current physical state.
+            return self.observe(include_rgb=False)
         except Exception: raise PhysicsExecutionError('physical control/observation failed') from None
     def __read_physical_state(self):
         self.__require()
@@ -334,6 +339,10 @@ class GatewayExecutor:
             if raw.get("camera_status") is not None:
                 # 相机没配好时也要让选手看见 —— 否则他会以为图像是空的。
                 images["camera_status"] = str(raw["camera_status"])
+            if raw.get("wrist_frame") is not None:
+                images["wrist_camera"] = raw["wrist_frame"]
+            if raw.get("wrist_camera_status") is not None:
+                images["wrist_camera_status"] = str(raw["wrist_camera_status"])
             if images:
                 out["images"] = images
         return out

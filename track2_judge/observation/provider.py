@@ -56,12 +56,14 @@ class ObservationProvider:
     """
 
     def __init__(self,*,approved_fields=(),camera=None,camera_required=False,
-                 synthetic_camera=False,live=False):
+                 synthetic_camera=False,live=False,wrist_camera=None):
         if set(approved_fields)-ALLOWED_FIELDS:raise ValueError('unknown public field')
         self.approved_fields=set(approved_fields);self.camera=camera;self.camera_required=camera_required
         self.synthetic_camera=synthetic_camera;self.first_frame=None;self.camera_status='NOT CONFIGURED'
         # `live` 只影响「要不要每步重拍」；帧的**来源**（camera 回调）不变。
         self.live=bool(live);self._bound_env=None;self.frame_count=0
+        self.wrist_camera=wrist_camera;self.wrist_frame=None
+        self.wrist_camera_status="NOT CONFIGURED"
     def prepare(self,inputs):
         if type(inputs) is not dict or set(inputs)-self.approved_fields:raise ValueError('unapproved public input')
         result=json.loads(json.dumps(plain(inputs),allow_nan=False))
@@ -88,6 +90,11 @@ class ObservationProvider:
         """绑定 env。（`live=True` 时不在这里拍首帧，见 `observation`。）"""
         self._bound_env=env
         self.first_frame=None
+        self.camera_status="NOT CONFIGURED"
+        self.wrist_frame=None
+        self.wrist_camera_status="NOT CONFIGURED"
+        if self.wrist_camera is not None and not self.live:
+            self._capture_wrist()
         if self.camera is None:
             self.camera_status='NOT CONFIGURED'
             if self.camera_required:raise RuntimeError('required first-frame camera absent')
@@ -104,8 +111,20 @@ class ObservationProvider:
             self.camera_status='FAIL'
             if self.camera_required:raise RuntimeError('first-frame capture failed') from None
 
+    def _capture_wrist(self):
+        # Clear before capture so a failed camera never exposes an old frame.
+        self.wrist_frame=None
+        try:
+            self.wrist_frame=rgb_payload(self.wrist_camera(self._bound_env),
+                                         source='trusted_wrist_camera_rgb')
+            self.wrist_camera_status='PASS'
+        except Exception:
+            self.wrist_camera_status='FAIL'
+            if self.camera_required:
+                raise RuntimeError('wrist camera capture failed') from None
+
     def observation(self):
-        """返回 `{'first_frame', 'camera_status'}`。
+        """返回固定相机帧；配置腕部相机时附带腕部帧与状态。
 
         `live=True` 时**每次调用都重拍**；拍失败 → `camera_status='FAIL'` +
         `first_frame=None`（**不留上一帧**）。
@@ -120,4 +139,10 @@ class ObservationProvider:
                 # ★ 不留陈旧帧 —— 否则选手会把过期画面当成新的。
                 self.first_frame=None
                 if self.camera_required:raise RuntimeError('camera capture failed') from None
-        return {'first_frame':copy.deepcopy(self.first_frame),'camera_status':self.camera_status}
+        result={'first_frame':copy.deepcopy(self.first_frame),'camera_status':self.camera_status}
+        if self.wrist_camera is not None:
+            if self.live and self._bound_env is not None:
+                self._capture_wrist()
+            result.update(wrist_frame=copy.deepcopy(self.wrist_frame),
+                          wrist_camera_status=self.wrist_camera_status)
+        return result

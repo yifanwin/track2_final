@@ -230,7 +230,7 @@ def _attach_visual(actor, name, visual):
     return True
 
 
-def create_case_env(bundle,casebank,seed=0,solver=(30,4),*,allow_unapproved_diagnostics=False,diagnostic_camera=None,render_device=None):
+def create_case_env(bundle,casebank,seed=0,solver=(30,4),*,allow_unapproved_diagnostics=False,diagnostic_camera=None,render_device=None,wrist_camera=False):
     from track2_judge.contract.profile import PROFILE,validate
     if bundle['contract'].get('scoring_profile')==PROFILE:validate(bundle['contract'])
     elif not allow_unapproved_diagnostics:raise RuntimeError("diagnostic profile explicit opt-in required")
@@ -263,7 +263,15 @@ def create_case_env(bundle,casebank,seed=0,solver=(30,4),*,allow_unapproved_diag
                                                 (center+np.array([0.,-0.2,0.8])).tolist()),
                            dtype=float)
             up=np.asarray(diagnostic_camera.get('up',_CAMERA_UP),dtype=float)
-            return CameraConfig('diagnostic_public_rgb',sapien_utils.look_at(eye,center,up=up),256,256,fov,.01,20.0)
+            cameras=[CameraConfig('diagnostic_public_rgb',sapien_utils.look_at(eye,center,up=up),256,256,fov,.01,20.0)]
+            if wrist_camera:
+                # Robot-relative RGB only. No target pose or hidden scene metadata.
+                # +Z points from the gripper base towards its fingertips.
+                mount=self.agent.robot.links_map['gripper_base']
+                pose=sapien_utils.look_at([.075,0,.055],[0,0,.23],up=[0,1,0])
+                cameras.append(CameraConfig('public_wrist_rgb',pose,256,256,
+                                            1.2,.005,3.0,mount=mount))
+            return cameras
         def evaluate(self):return {}
         def _get_obs_extra(self,info):return {}
         def _load_agent(self,options):super()._load_agent(options,sapien.Pose(bundle['robot_base_candidate_m'],bundle.get('robot_base_candidate_q_wxyz',[1,0,0,0])))
